@@ -1,32 +1,102 @@
 # pyMoove
 
-## What it is
-    
-    Modern dairy farming rely on data to track among other things the health and growth of dairy cows.
-    When a dairy cow is feeding it might be displaced by some other cow. These feeding-displacement interactions 
-    are important to understand in order to ensure all dairy cows are well-fed. 
+Tools for analysing and predicting cow feeding displacement events using sensor data.
 
-    Current farming techniques use cameras to track displacement events. This project aims to track and predict displacement events using sensor data. 
+## What is pyMoove?
 
-    Moo-ve-over is simply the collection of software program/script tools to analyze and predict the events.
+Modern dairy farming relies on data to monitor aspects such as the health and growth of dairy cows.
 
-## The moo4feed R package
+When a cow is feeding, it can be displaced by another cow. Understanding these feeding-displacement interactions is important for ensuring that all cows have sufficient access to food.
 
-    https://github.com/skysheng7/moo4feed
+Current approaches often use cameras to identify displacement events. This project aims to analyse and predict these events using sensor data.
 
-## 
-    
-    The moo4feed R package is an R package designed to extract feeding and drinking data collected from livestock farming systems. 
+pyMoove is a collection of Python tools developed to support the analysis and prediction of cow feeding displacement events.
 
-    Installation details can be found the github.
+## Related project: moo4feed
 
-    Developed by a team from University of British Columbia
+This project builds upon and makes use of data and concepts related to the moo4feed R package.
 
-## The moo4feed website
 
-    https://www.skysheng.io/moo4feed/
+## Project structure
 
-## moo4feed Tutorials
+```text
+pyMoove/
+│
+├── src/
+│   └── pyMoove/
+│       └── __init__.py
+│
+├── tests/
+│   └── test_example.py
+│
+├── .github/
+│   └── workflows/
+│       └── test.yml
+│
+├── README.md
+├── pyproject.toml
+└── .gitignore
+```
 
-    https://www.skysheng.io/moo4feed/articles/index.html
+### Directory and file descriptions
+
+| File / directory | Description |
+|---|---|
+| `src/pyMoove/` | Main Python package containing the library's functionality. |
+| `__init__.py` | Defines the package's public interface. |
+| `tests/` | Contains automated tests for the library. |
+| `.github/workflows/` | Contains GitHub Actions workflows for automated testing. |
+| `README.md` | Project overview, documentation and development instructions. |
+| `pyproject.toml` | Project metadata, dependencies and build configuration. |
+| `.gitignore` | Specifies files and directories Git should ignore. |
+
+**GitHub:** https://github.com/skysheng7/moo4feed
+
+moo4feed is an R package developed by a team at the University of British Columbia. It provides tools for extracting feeding and drinking data collected from livestock farming systems.
+
+**Website:** https://www.skysheng.io/moo4feed/
+
+**Tutorials:** https://www.skysheng.io/moo4feed/articles/index.html
+
+## Development setup
+
+### Requirements
+
+- Python 3.10 or later
+- Git
+
+### Setting up the environment
+
+Clone the repository:
+
+```bash
+git clone https://github.com/khaloscar/pyMoove
+cd pyMoove
+```
+
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+Install the project and development dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
+### Running tests
+
+Run the test suite using pytest:
+
+```bash
+pytest
+```
 
