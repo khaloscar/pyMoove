@@ -1,3 +1,10 @@
+# Data & Large Datasets
+data/
+*.parquet
+*.json.gz
+*.csv
+*.xlsx
+
 # Virtual environments
 .venv/
 venv/
@@ -6,16 +13,22 @@ venv/
 __pycache__/
 *.py[cod]
 
-# Testing
+# Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
 
-# IDE
+# IDE & OS Metadata
 .idea/
 .vscode/
+.DS_Store
 
 # Build files
 dist/
 build/
 *.egg-info/
+
+# R history & workspaces
+.Rhistory
+.RData
+.RDataTmp

@@ -22,6 +22,12 @@ This project builds upon and makes use of data and concepts related to the moo4f
 ```text
 pyMoove/
 │
+├── data/                            # Local directory for raw and processed datasets (git-ignored)
+│
+├── scripts/
+│   ├── clean_rtls_anispace.R
+│   └── data_cleaning.py
+│
 ├── src/
 │   └── pyMoove/
 │       └── __init__.py
@@ -36,12 +42,14 @@ pyMoove/
 ├── README.md
 ├── pyproject.toml
 └── .gitignore
+
 ```
 
 ### Directory and file descriptions
 
 | File / directory | Description |
 |---|---|
+| `data/` | Local directory for raw and processed datasets (git-ignored). |
 | `src/pyMoove/` | Main Python package containing the library's functionality. |
 | `__init__.py` | Defines the package's public interface. |
 | `tests/` | Contains automated tests for the library. |
