@@ -8,11 +8,13 @@ name = "pyMoove"
 version = "0.1.0"
 description = "Tools for analysing and predicting cow feeding displacement events"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = "MIT"
 
 dependencies = [
     # Add packages your library actually needs here
+    "pandas>=3.1,<4",
+    "openpyxl"
 ]
 
 [project.optional-dependencies]
