@@ -112,7 +112,7 @@ def get_feed_table_info(
 def plot_feed_tables(
     zone_info_path: str | Path,
 ) -> tuple[plt.Figure, plt.Axes]:
-    """Plot feed-table polygons over the walking-alley zones.
+    """Plot all zone types, highlighting and labeling the feed-table zones.
 
     Parameters
     ----------
@@ -126,35 +126,40 @@ def plot_feed_tables(
     """
     zones = _load_zone_coordinates(zone_info_path)
     feed_tables = zones.loc[zones["zone_type"].eq("FeedTable")]
-    walking_alleys = zones.loc[zones["zone_type"].eq("WalkingAlley")]
+    zone_colors = {
+        "WalkingAlley": "#eeeeee",
+        "FeedTable": "#91d18b",
+        "Cubicles": "#a6cee3",
+        "MilkingArea": "#fdbf6f",
+        "HoldingArea": "#cab2d6",
+        "Other": "#bdb76b",
+        "Sort_TreatmentArea": "#fb9a99",
+    }
 
     fig, ax = plt.subplots(figsize=(18, 8), constrained_layout=True)
 
-    for index, row in walking_alleys.iterrows():
-        x, y = zip(*row["coordinates_m"])
-        ax.fill(
-            x,
-            y,
-            color="#eeeeee",
-            edgecolor="#444444",
-            linewidth=1.3,
-            zorder=1,
-            label="Walking-alley zones"
-            if index == walking_alleys.index[0]
-            else None,
-        )
+    # Draw feed tables last so their outlines and labels remain visible.
+    zones_to_plot = zones.assign(
+        _plot_order=zones["zone_type"].eq("FeedTable").astype(int)
+    ).sort_values("_plot_order")
+    seen_zone_types = set()
 
-    for index, row in feed_tables.iterrows():
+    for _, row in zones_to_plot.iterrows():
+        zone_type = row["zone_type"] if pd.notna(row["zone_type"]) else "Unspecified"
         x, y = zip(*row["coordinates_m"])
         ax.fill(
             x,
             y,
-            color="#91d18b",
-            edgecolor="#267a35",
-            linewidth=1.0,
-            zorder=2,
-            label="Feed tables" if index == feed_tables.index[0] else None,
+            color=zone_colors.get(zone_type, "#8c8c8c"),
+            edgecolor="#444444" if zone_type == "WalkingAlley" else "#333333",
+            linewidth=1.3 if zone_type == "WalkingAlley" else 0.8,
+            alpha=0.65 if zone_type != "WalkingAlley" else 0.5,
+            zorder=2 if zone_type == "FeedTable" else 1,
+            label=zone_type if zone_type not in seen_zone_types else None,
         )
+        seen_zone_types.add(zone_type)
+
+    for _, row in feed_tables.iterrows():
         ax.annotate(
             row["zone_name"].removeprefix("rect"),
             xy=(
@@ -181,7 +186,7 @@ def plot_feed_tables(
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("Farm-local X (m)")
     ax.set_ylabel("Farm-local Y (m)")
-    ax.set_title("Farm layout: walking alleys and feed tables")
+    ax.set_title("Farm layout by zone type")
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.35, zorder=0)
     ax.legend(loc="upper right", frameon=True)
     ax.margins(0.02)
