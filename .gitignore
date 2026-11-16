@@ -36,3 +36,7 @@ build/
 # UV
 .python-version
 uv.lock
+
+
+# Images
+*.png

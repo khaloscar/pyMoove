@@ -1,4 +1,4 @@
-"""Load, inspect, and plot feed-table zones from zone_info.csv."""
+"""Load, filter, inspect, and plot farm zones from ``zone_info.csv``."""
 
 import ast
 import csv
@@ -72,60 +72,67 @@ def _load_zone_coordinates(zone_info_path: str | Path) -> pd.DataFrame:
     return pd.concat([zones, bounds], axis=1)
 
 
-def get_feed_table_info(
+def get_zone_info(
     zone_info_path: str | Path,
     csv_path: str | Path | None = None,
 ) -> pd.DataFrame:
-    """Return feed-table vertices and dimensions in metres.
+    """Load and filter farm zones, returning vertices and dimensions in metres.
 
     Parameters
     ----------
     zone_info_path:
         Path to the semicolon-separated ``zone_info.csv`` file.
     csv_path:
-        Optional output path. If provided, save the returned feed-table
-        information as a CSV file. ``coordinates_m`` is serialized as text.
+        Optional output path. If provided, save the returned zone information
+        as a CSV file. ``coordinates_m`` is serialized as text.
 
     Returns
     -------
     pandas.DataFrame
-        One row per FeedTable zone. ``coordinates_m`` contains the ordered
+        One row per zone. ``coordinates_m`` contains the ordered
         polygon vertices as ``(x, y)`` tuples; bounds and dimensions are
         provided in separate metre-valued columns.
 
     Examples
     --------
-    >>> info = get_feed_table_info("data/zone_info.csv")
-    >>> info = get_feed_table_info("data/zone_info.csv", "data/feed_tables.csv")
+    >>> info = get_zone_info("data/zone_info.csv")
+    >>> info = get_zone_info("data/zone_info.csv", "data/zones.csv")
     """
     zones = _load_zone_coordinates(zone_info_path)
-    feed_tables = zones.loc[zones["zone_type"].eq("FeedTable")].reset_index(
-        drop=True
-    )
-
+    # Keep the existing farm-area bounds filter, applied to every zone type.
+    zones_filtered = zones.loc[
+        (zones["x_min_m"] > 150) & (zones["y_min_m"] > -10)
+    ]
     if csv_path is not None:
-        feed_tables.to_csv(csv_path, index=False)
+        zones_filtered.to_csv(csv_path, index=False)
+    return zones_filtered.reset_index(drop=True)
 
-    return feed_tables
 
-
-def plot_feed_tables(
-    zone_info_path: str | Path,
+def plot_zones(
+    zones: pd.DataFrame | str | Path,
 ) -> tuple[plt.Figure, plt.Axes]:
-    """Plot all zone types, highlighting and labeling the feed-table zones.
+    """Plot zones from a DataFrame or a CSV exported by
+    :func:`get_zone_info`.
 
     Parameters
     ----------
-    zone_info_path:
-        Path to the semicolon-separated ``zone_info.csv`` file.
+    zones:
+        The filtered DataFrame returned by :func:`get_zone_info`, or
+        the path to a CSV written by that function.
 
     Returns
     -------
     tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
         The figure and axes, allowing further customization or saving.
     """
-    zones = _load_zone_coordinates(zone_info_path)
-    feed_tables = zones.loc[zones["zone_type"].eq("FeedTable")]
+    if isinstance(zones, (str, Path)):
+        zones = pd.read_csv(
+            zones,
+            converters={"coordinates_m": ast.literal_eval},
+        )
+
+    fig, ax = plt.subplots(figsize=(18, 8), constrained_layout=True)
+
     zone_colors = {
         "WalkingAlley": "#eeeeee",
         "FeedTable": "#91d18b",
@@ -135,17 +142,15 @@ def plot_feed_tables(
         "Other": "#bdb76b",
         "Sort_TreatmentArea": "#fb9a99",
     }
-
-    fig, ax = plt.subplots(figsize=(18, 8), constrained_layout=True)
-
-    # Draw feed tables last so their outlines and labels remain visible.
     zones_to_plot = zones.assign(
         _plot_order=zones["zone_type"].eq("FeedTable").astype(int)
     ).sort_values("_plot_order")
     seen_zone_types = set()
 
     for _, row in zones_to_plot.iterrows():
-        zone_type = row["zone_type"] if pd.notna(row["zone_type"]) else "Unspecified"
+        zone_type = (
+            row["zone_type"] if pd.notna(row["zone_type"]) else "Unspecified"
+        )
         x, y = zip(*row["coordinates_m"])
         ax.fill(
             x,
@@ -159,7 +164,10 @@ def plot_feed_tables(
         )
         seen_zone_types.add(zone_type)
 
-    for _, row in feed_tables.iterrows():
+    zones_to_label = zones_to_plot.loc[
+        zones_to_plot["zone_type"].eq("FeedTable")
+    ]
+    for _, row in zones_to_label.iterrows():
         ax.annotate(
             row["zone_name"].removeprefix("rect"),
             xy=(
@@ -192,3 +200,8 @@ def plot_feed_tables(
     ax.margins(0.02)
     plt.show()
     return fig, ax
+
+
+if __name__ == "__main__":
+    zones = get_zone_info("data/zone_info.csv", "data/zones_filtered.csv")
+    plot_zones(zones)
