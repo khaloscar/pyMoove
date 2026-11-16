@@ -21,7 +21,8 @@ ani_obj <- load.Space(
   ID.col    = "cow_id",
   x.col     = "x",
   y.col     = "y",
-  TRes      = 2.22,
+  # AniSpace rounds timestamps to whole seconds, so use an integer grid.
+  TRes      = 2,
   Temp.sort = TRUE,
   verbose   = TRUE
 )
@@ -40,7 +41,7 @@ cat("4. Interpolating missing fixes (Makima algorithm)...\n")
 ani_interp <- interpolate(
   AniObj  = ani_clean,
   method  = "makima",
-  TRes    = 2.22,
+  TRes    = 2,
   TCap    = 120,
   tails   = FALSE,
   verbose = TRUE
