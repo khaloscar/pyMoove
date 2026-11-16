@@ -16,7 +16,7 @@ cat("Loaded", nrow(raw_dt), "rows for", uniqueN(raw_dt$cow_id), "cows.\n")
 # 2. Transform into AniSpace Object via load.Space()
 cat("2. Constructing AniSpace spatial object...\n")
 ani_obj <- load.Space(
-  PosObj    = raw_dt,
+  PosObj    = as.data.frame(raw_dt),
   Time.col  = "timestamp",
   ID.col    = "cow_id",
   x.col     = "x",
@@ -48,10 +48,50 @@ ani_interp <- interpolate(
 
 # 5. Extract Tabular Data and Export to Parquet
 cat("5. Exporting cleaned AniSpace trajectories...\n")
-clean_df <- as.data.frame(ani_interp)
-clean_dt <- as.data.table(clean_df)
+position_rows <- lapply(seq_along(ani_interp@Pos), function(i) {
+  positions <- as.data.frame(ani_interp@Pos[[i]])
 
-clean_dt[, datetime := as.POSIXct(Time, origin = "1970-01-01", tz = "UTC")]
+  # AniSpace's as.data.frame() method fails when an individual has no
+  # positions, so omit empty trajectories while preserving the other rows.
+  if (nrow(positions) == 0L) {
+    return(NULL)
+  }
+
+  # AniSpace does not retain speed in the object. Calculate the step speed
+  # from consecutive positions; coordinates are metres and Time is seconds.
+  dt <- diff(as.numeric(positions$Time))
+  dx <- diff(as.numeric(positions$x))
+  dy <- diff(as.numeric(positions$y))
+  velocity <- c(NA_real_, sqrt(dx^2 + dy^2) / dt)
+  velocity[!is.finite(velocity)] <- NA_real_
+  positions$velocity <- velocity
+
+  cbind(
+    NIDs = rep(ani_interp@NIDs[i], nrow(positions)),
+    IDs = rep(ani_interp@IDs[i], nrow(positions)),
+    positions
+  )
+})
+position_rows <- Filter(Negate(is.null), position_rows)
+
+if (length(position_rows) > 0L) {
+  clean_dt <- rbindlist(position_rows, use.names = TRUE)
+} else {
+  clean_dt <- data.table(
+    NIDs = integer(),
+    IDs = character(),
+    Time = integer(),
+    x = numeric(),
+    y = numeric()
+  )
+}
+
+# AniSpace stores Time as seconds relative to the first timestamp in TLim.
+clean_dt[, datetime := as.POSIXct(
+  ani_interp@TLim[1] + Time,
+  origin = "1970-01-01",
+  tz = "UTC"
+)]
 
 output_path <- "data/rtls_cleaned_anispace.parquet"
 write_parquet(clean_dt, output_path)
