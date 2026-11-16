@@ -1,4 +1,4 @@
-"""Plot cow positioning data during feeding events on top of farm zones."""
+"""Plot cow positioning data and calculate bin spatial statistics during feeding events."""
 
 from pathlib import Path
 import sys
@@ -251,6 +251,142 @@ def get_bin_feeding_positions(
     return pd.concat(collected, ignore_index=True)
 
 
+def calculate_bin_position_statistics(
+    data: dict[str, pd.DataFrame],
+    bins: list[int] | int | range,
+    tz: str = "Europe/Stockholm",
+) -> pd.DataFrame:
+    """Calculate the spatial centroid and standard deviation for each bin during feeding.
+
+    For each specified bin, finds all feeding visits, retrieves the cow's
+    position fixes during each visit, and computes the spatial centroid
+    (mean x, mean y) and standard deviation (std x, std y).
+
+    Parameters
+    ----------
+    data:
+        Processed dataset containing 'feeding' and 'positions' DataFrames.
+    bins:
+        A bin number, list of bin numbers, or range of bin numbers.
+    tz:
+        Timezone of the feeder timestamps (default: 'Europe/Stockholm').
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns:
+        - 'bin': Bin number
+        - 'centroid_x': Mean X coordinate in meters
+        - 'centroid_y': Mean Y coordinate in meters
+        - 'std_x': Standard deviation in X (meters)
+        - 'std_y': Standard deviation in Y (meters)
+        - 'num_fixes': Total number of position fixes during visits to this bin
+        - 'num_visits': Total feeding visits recorded at this bin
+        - 'num_cows': Number of unique cows that visited this bin
+    """
+    if isinstance(bins, (int, str)):
+        bin_list = [int(bins)]
+    else:
+        bin_list = [int(b) for b in bins]
+
+    feeding_df = data["feeding"]
+    positions_df = data["positions"]
+
+    # Filter feeding events for the requested bins
+    target_events = feeding_df.loc[feeding_df["bin"].isin(bin_list)].copy()
+    if target_events.empty:
+        return pd.DataFrame(
+            columns=[
+                "bin",
+                "centroid_x",
+                "centroid_y",
+                "std_x",
+                "std_y",
+                "num_fixes",
+                "num_visits",
+                "num_cows",
+            ]
+        )
+
+    # Pre-filter positions by the cows that visited these bins for high query speed
+    cows_at_bins = set(target_events["cow"].astype(str).unique())
+    pos_subset = positions_df.loc[
+        positions_df["IDs"].astype(str).isin(cows_at_bins)
+    ].copy()
+    date_str = str(positions_df["datetime"].min().date())
+
+    # Group positions by cow ID for fast lookups
+    pos_by_cow = dict(tuple(pos_subset.groupby(pos_subset["IDs"].astype(str))))
+
+    results = []
+    for bin_id in bin_list:
+        b_events = target_events.loc[target_events["bin"] == bin_id]
+        if b_events.empty:
+            results.append({
+                "bin": bin_id,
+                "centroid_x": None,
+                "centroid_y": None,
+                "std_x": None,
+                "std_y": None,
+                "num_fixes": 0,
+                "num_visits": 0,
+                "num_cows": 0,
+            })
+            continue
+
+        b_fixes = []
+        for _, event in b_events.iterrows():
+            cow_id = str(event["cow"])
+            if cow_id not in pos_by_cow:
+                continue
+            cow_pos = pos_by_cow[cow_id]
+
+            start_str = str(event["start_time"])
+            start_dt = pd.Timestamp(f"{date_str} {start_str}")
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.tz_localize(tz)
+            start_dt_utc = start_dt.tz_convert("UTC")
+
+            if "duration" in event and pd.notna(event["duration"]):
+                end_dt_utc = start_dt_utc + pd.Timedelta(seconds=float(event["duration"]))
+            else:
+                end_str = str(event["end_time"])
+                end_dt = pd.Timestamp(f"{date_str} {end_str}")
+                if end_dt.tzinfo is None:
+                    end_dt = end_dt.tz_localize(tz)
+                end_dt_utc = end_dt.tz_convert("UTC")
+
+            pts = cow_pos.loc[cow_pos["datetime"].between(start_dt_utc, end_dt_utc)]
+            if not pts.empty:
+                b_fixes.append(pts[["x", "y"]])
+
+        if b_fixes:
+            all_b = pd.concat(b_fixes, ignore_index=True)
+            results.append({
+                "bin": bin_id,
+                "centroid_x": float(all_b["x"].mean()),
+                "centroid_y": float(all_b["y"].mean()),
+                "std_x": float(all_b["x"].std()),
+                "std_y": float(all_b["y"].std()),
+                "num_fixes": len(all_b),
+                "num_visits": len(b_events),
+                "num_cows": b_events["cow"].nunique(),
+            })
+        else:
+            results.append({
+                "bin": bin_id,
+                "centroid_x": None,
+                "centroid_y": None,
+                "std_x": None,
+                "std_y": None,
+                "num_fixes": 0,
+                "num_visits": len(b_events),
+                "num_cows": b_events["cow"].nunique(),
+            })
+
+    return pd.DataFrame(results)
+
+
 def plot_bin_feeding_positions(
     data: dict[str, pd.DataFrame],
     zones: pd.DataFrame | str | Path,
@@ -378,9 +514,15 @@ if __name__ == "__main__":
     else:
         zones = zones_path
 
-    # Option A: Plot all feeding events for a specific bin (e.g. Bin 21, 24, etc.)
-    target_bin = 2
-    fig, ax = plot_bin_feeding_positions(data, zones, bin_id=target_bin, color_by_cow=True)
+    # Example 1: Calculate centroids and standard deviations for a list of bins
+    bins_to_analyze = range(1, 21)
+    bin_stats = calculate_bin_position_statistics(data, bins=bins_to_analyze)
+    print("\n--- Bin Position Statistics ---")
+    print(bin_stats.to_string(index=False))
 
-    # Option B: Plot a single feeding event by index (uncomment to use):
+    # Example 2: Plot all feeding events for a specific bin
+    # target_bin = 2
+    # fig, ax = plot_bin_feeding_positions(data, zones, bin_id=target_bin, color_by_cow=True)
+
+    # Example 3: Plot a single feeding event by index (uncomment to use):
     # fig, ax = plot_feeding_event(data, zones, event_index=0)
