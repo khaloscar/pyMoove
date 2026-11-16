@@ -36,3 +36,7 @@ build/
 # UV
 .python-version
 uv.lock
+
+# Testing scripts 
+scripts/output.log
+scripts/try_loader.py
