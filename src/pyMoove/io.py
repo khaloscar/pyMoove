@@ -56,9 +56,9 @@ def load_processed_dataset(dataFolderPath: str | Path)->dict[str, pd.DataFrame]:
     ---------
     dict[str, pd.DataFrame]
         Python dictionary containing three datasets:
-            - "positions": Cleaned and interpolated RTLS position data
+            - "positions": AniSpace cleaned and interpolated RTLS position data
             - "feeding": Feeding visits records
-            - "replacements": Detected replacement events
+            - "replacements": moo4feed Detected replacement events
     """
 
     folder = Path(dataFolderPath)
@@ -66,7 +66,7 @@ def load_processed_dataset(dataFolderPath: str | Path)->dict[str, pd.DataFrame]:
     #NOTE: Hardcoded for now
     dataset = {
         "positions": pd.read_parquet(
-            folder / "rtls_raw_combined.parquet"
+            folder / "rtls_cleaned_anispace.parquet"
         ),
         "feeding": pd.read_parquet(
             folder / "Feed_251010.parquet"
