@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Patch
 
 
@@ -22,12 +23,25 @@ def plot_replacement_example(
     data: Mapping[str, pd.DataFrame],
     zones: pd.DataFrame | None = None,
     event_index: int = 0,
-) -> tuple[plt.Figure, plt.Axes]:
+    animate: bool = False,
+    mark_start: bool = True,
+    print_start_positions: bool = False,
+    animation_interval_ms: int = 250,
+) -> (
+    tuple[plt.Figure, plt.Axes]
+    | tuple[plt.Figure, plt.Axes, FuncAnimation]
+):
     """Plot the two cows' positions during a replacement interval.
 
     The interval starts at the event's ``time`` and ends after its
     ``bout_interval`` (in seconds). If ``zones`` is provided, draw the farm
     layout in the background; otherwise, show only the cows' positions.
+
+    The start marker marks each cow's first available fix in the interval.
+    Set ``animate=True`` to also return a ``FuncAnimation`` as the third
+    return value; in Jupyter, the animation is displayed automatically.
+    ``print_start_positions=True`` prints those first-fix coordinates in
+    farm-local metres.
     """
     positions = data["positions"].copy()
     replacements = data["replacements"]
@@ -100,16 +114,20 @@ def plot_replacement_example(
                     zorder=1,
                 )
 
-    line_handles = []
+    start_positions = {}
+    cow_tracks = {}
     for role, cow_id in cow_ids.items():
         cow_positions = local_positions.loc[
             local_positions["IDs"].eq(cow_id)
         ].sort_values("datetime")
         if cow_positions.empty:
             continue
+        start_positions[role] = cow_positions.iloc[0]
+        cow_tracks[role] = cow_positions
+
         (line,) = ax.plot(
-            cow_positions["x"],
-            cow_positions["y"],
+            [],
+            [],
             "o-",
             color=cow_colors[role],
             markersize=3,
@@ -117,7 +135,47 @@ def plot_replacement_example(
             zorder=3,
             label=f"{role.title()} ({cow_id})",
         )
-        line_handles.append(line)
+        if animate:
+            (current_point,) = ax.plot(
+                [],
+                [],
+                "o",
+                color=cow_colors[role],
+                markersize=7,
+                markeredgecolor="white",
+                markeredgewidth=0.8,
+                zorder=4,
+            )
+            cow_tracks[role] = (cow_positions, line, current_point)
+        else:
+            cow_tracks[role] = (cow_positions, line, None)
+            line.set_data(cow_positions["x"], cow_positions["y"])
+
+        if mark_start:
+            start = start_positions[role]
+            ax.scatter(
+                start["x"],
+                start["y"],
+                marker="X",
+                s=100,
+                color=cow_colors[role],
+                edgecolor="black",
+                linewidth=0.7,
+                zorder=5,
+                label=f"{role.title()} start",
+            )
+
+    if print_start_positions:
+        print("First observed positions in the replacement interval:")
+        for role, cow_id in cow_ids.items():
+            if role not in start_positions:
+                print(f"  {role.title()} ({cow_id}): no position fix")
+                continue
+            start = start_positions[role]
+            print(
+                f"  {role.title()} ({cow_id}): "
+                f"x={start['x']:.3f} m, y={start['y']:.3f} m"
+            )
 
     if local_positions.empty:
         ax.text(
@@ -130,15 +188,24 @@ def plot_replacement_example(
             bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
         )
 
-    line_labels = [handle.get_label() for handle in line_handles]
-    if zone_handles or line_handles:
+    handles, labels = ax.get_legend_handles_labels()
+    if zone_handles or handles:
         ax.legend(
-            handles=list(zone_handles.values()) + line_handles,
-            labels=list(zone_handles) + line_labels,
+            handles=list(zone_handles.values()) + handles,
+            labels=list(zone_handles) + labels,
             fontsize=8,
             loc="upper right",
         )
-    ax.set_aspect("equal", adjustable="datalim" if zones is None else "box")
+    if zones is None and not local_positions.empty:
+        x_span = local_positions["x"].max() - local_positions["x"].min()
+        y_span = local_positions["y"].max() - local_positions["y"].min()
+        x_padding = max(x_span * 0.05, 0.25)
+        y_padding = max(y_span * 0.05, 0.25)
+        ax.set_xlim(local_positions["x"].min() - x_padding,
+                    local_positions["x"].max() + x_padding)
+        ax.set_ylim(local_positions["y"].min() - y_padding,
+                    local_positions["y"].max() + y_padding)
+    ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("Farm-local X (m)")
     ax.set_ylabel("Farm-local Y (m)")
     ax.set_title("Cow positions during replacement interval")
@@ -148,4 +215,50 @@ def plot_replacement_example(
         f"Bin {event['bin']} · {event['time']} · "
         f"interval {event['bout_interval']} s"
     )
-    return fig, ax
+
+    if not animate:
+        return fig, ax
+    if local_positions.empty:
+        raise ValueError("Cannot animate this event: no cow positions in its interval.")
+
+    frame_times = pd.DatetimeIndex(local_positions["datetime"].drop_duplicates())
+    frame_times = frame_times.sort_values()
+
+    def update(frame_index: int):
+        frame_time = frame_times[frame_index]
+        updated_artists = []
+        for role, (cow_positions, line, current_point) in cow_tracks.items():
+            visible = cow_positions.loc[cow_positions["datetime"] <= frame_time]
+            line.set_data(visible["x"], visible["y"])
+            latest = visible.iloc[-1]
+            current_point.set_data([latest["x"]], [latest["y"]])
+            updated_artists.extend([line, current_point])
+        ax.set_title(
+            "Cow positions during replacement interval\n"
+            f"{frame_time.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        )
+        return updated_artists
+
+    animation = FuncAnimation(
+        fig,
+        update,
+        frames=len(frame_times),
+        interval=animation_interval_ms,
+        repeat=False,
+        blit=False,
+    )
+
+    try:
+        from IPython import get_ipython
+        from IPython.display import HTML, display
+
+        shell = get_ipython()
+        if shell is not None and shell.__class__.__name__ == "ZMQInteractiveShell":
+            display(HTML(animation.to_jshtml()))
+            # Prevent Jupyter's end-of-cell hook from also displaying the
+            # underlying Matplotlib figure as a separate static image.
+            plt.close(fig)
+    except ImportError:
+        pass
+
+    return fig, ax, animation
