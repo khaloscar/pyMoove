@@ -110,6 +110,8 @@ def get_zone_info(
 
 def plot_zones(
     zones: pd.DataFrame | str | Path,
+    ax: plt.Axes | None = None,
+    show: bool = True,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Plot zones from a DataFrame or a CSV exported by
     :func:`get_zone_info`.
@@ -119,6 +121,11 @@ def plot_zones(
     zones:
         The filtered DataFrame returned by :func:`get_zone_info`, or
         the path to a CSV written by that function.
+    ax:
+        Optional existing matplotlib Axes to draw on. If None, a new figure
+        and axes are created.
+    show:
+        Whether to call ``plt.show()`` before returning. Defaults to True.
 
     Returns
     -------
@@ -131,7 +138,10 @@ def plot_zones(
             converters={"coordinates_m": ast.literal_eval},
         )
 
-    fig, ax = plt.subplots(figsize=(18, 8), constrained_layout=True)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(18, 8), constrained_layout=True)
+    else:
+        fig = ax.get_figure()
 
     zone_colors = {
         "WalkingAlley": "#eeeeee",
@@ -198,7 +208,8 @@ def plot_zones(
     ax.grid(True, linestyle="--", linewidth=0.6, alpha=0.35, zorder=0)
     ax.legend(loc="upper right", frameon=True)
     ax.margins(0.02)
-    plt.show()
+    if show:
+        plt.show()
     return fig, ax
 
 
