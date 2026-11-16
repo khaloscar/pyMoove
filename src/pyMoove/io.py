@@ -7,6 +7,13 @@ import gzip
 import json
 import pandas as pd
 from pathlib import Path
+from typing import TypedDict
+
+"""Full dataset type, for LSP support"""
+class datasetFull(TypedDict):
+    positions: pd.DataFrame
+    feeding: pd.DataFrame
+    replacements: pd.DataFrame
 
 #NOTE: Potential issue: 24h data-set may be fine to load completely into RAM, what if data-set spans several days or something? 
 #NOTE: Assumptions: Just load whatever data is available, it might be or might not be cleaned right now, decide at a later point
@@ -32,16 +39,39 @@ from pathlib import Path
 def load_positions_parquet(filePath: str | Path)->pd.DataFrame:
     """Load processed position data from parquet file into panda Dataframe
     filePath: Path to file str or Path"""
-    return pd.read_parquet(filePath);
+    dataset = pd.read_parquet(filePath)
+
+    dataset["IDs"] = (
+        dataset["IDs"].astype("string")
+    )
+    dataset["NIDs"] = (
+        dataset["NIDs"].astype("string")
+    )
+    return dataset
 
 
 def load_replacements_parquet(filePath: str | Path)->pd.DataFrame:
     """Load processed replacements data from parquet file into panda Dataframe
     filePath: Path to file str or Path"""
-    return pd.read_parquet(filePath);
+
+    dataset = pd.read_parquet(filePath)
+
+    dataset["actor_cow"] = (
+        dataset["actor_cow"].astype("string")
+    )
+    dataset["reactor_cow"] = (
+        dataset["reactor_cow"].astype("string")
+    )
+
+    return dataset
 
 
-def load_processed_dataset(dataFolderPath: str | Path)->dict[str, pd.DataFrame]:
+def load_feeding_parquet(filePath: str | Path)->pd.DataFrame:
+    """Load feeding parquet"""
+    return pd.read_parquet(filePath)
+
+
+def load_processed_dataset(dataFolderPath: str | Path)->datasetFull:
     """
     Load preprocessed positioning, feeding and replacement data.
 
@@ -65,17 +95,14 @@ def load_processed_dataset(dataFolderPath: str | Path)->dict[str, pd.DataFrame]:
 
     #NOTE: Hardcoded for now
     dataset = {
-        "positions": pd.read_parquet(
-            folder / "rtls_cleaned_anispace.parquet"
-        ),
-        "feeding": pd.read_parquet(
+        "positions": load_positions_parquet(folder/"rtls_cleaned_anispace.parquet"),
+        "feeding": load_feeding_parquet(
             folder / "Feed_251010.parquet"
         ),
-        "replacements": pd.read_parquet(
+        "replacements": load_replacements_parquet(
             folder / "feed_replacements_20251010.parquet"
         ),
     }
-
 
     print(f"\nLoaded dataset in folder: {folder}")
     tot_mb = 0;
