@@ -1,5 +1,6 @@
 """Get some useful information about different datasets."""
 import pandas as pd
+import numpy as np
 
 def inspect_dataframe(df: pd.DataFrame, name: str = "Dataset")->None:
 
@@ -49,6 +50,7 @@ def inspect_positions(df: pd.Dataframe, name: str = "Positions data")->None:
     # Figure out number of cows in this set
     # 
 
+    #TODO: ??
     print(f"TODO: inspect_positions()")
 
 
@@ -82,14 +84,29 @@ def inspect_cow_statistict(ID: str, positions: pd.DataFrame, replacements: pd.Da
     # actor cows that replaced this cow
     actors = replacements.loc[reactor_mask, "actor_cow"]
 
+    # Most frequently replaced cows
+    reactor_counts = reactors.value_counts().head(5)
+
     print("\nMost frequently replaced cows:")
-    print(reactors.value_counts().head(5).rename_axis("Reactor ID").reset_index(name="Count").to_string(index=False))
+    print(f"{'Reactor ID':<12} {'Count':>6}")
+    for cow, count in reactor_counts.items():
+        print(f"{cow:<12} {count:>6}")
+
+    # Most frequent actors replacing this cow
+    actor_counts = actors.value_counts().head(5)
 
     print("\nMost frequent actors replacing this cow:")
-    print(actors.value_counts().head(5).rename_axis("Actor ID").reset_index(name="Count").to_string(index=False))
+    print(f"{'Actor ID':<12} {'Count':>6}")
+    for cow, count in actor_counts.items():
+        print(f"{cow:<12} {count:>6}")
+
+    # Replacements per feeding bin
+    bin_counts = cow_events["bin"].value_counts()
 
     print("\nReplacements per feeding bin:")
-    print(cow_events["bin"].value_counts().sort_index().rename_axis("Bin").reset_index(name="Count").to_string(index=False))
+    print(f"{'Bin':<12} {'Count':>6}")
+    for bin_id in sorted(bin_counts.index):
+        print(f"{bin_id:<12} {bin_counts[bin_id]:>6}")
 
     # How much of the position data has been interpolated for this cow?
     if not cow_positions.empty:
@@ -100,3 +117,99 @@ def inspect_cow_statistict(ID: str, positions: pd.DataFrame, replacements: pd.Da
         print(f"Interpolated observations: {cow_positions['Inter'].mean():.1%}")
         print(f"Median velocity: {cow_positions['velocity'].median():.3f} m/s")
         print(f"Maximum velocity: {cow_positions['velocity'].max():.3f} m/s")
+
+
+def inspect_replacement_event_statistict(
+        positions: pd.DataFrame,
+        replacements: pd.DataFrame,
+        bin_stats: pd.DataFrame,
+        window_s: float = 0.0,
+)->pd.DataFrame:
+
+    event_statistics = []
+
+    # Associate each replacement with its feeding-bin position
+    repl = replacements.merge(
+        bin_stats[["bin", "centroid_x", "centroid_y"]],
+        on="bin",
+        how="left",
+        validate="many_to_one",
+    )
+
+    # Group positions by cow once for faster access
+    cow_positions = {
+        str(ID): group.set_index("datetime")[["x", "y"]].sort_index()
+        for ID, group in positions.groupby("IDs")
+    }
+
+    empty = pd.DataFrame(
+        columns=["x", "y"],
+        index=pd.DatetimeIndex([], tz="UTC", name="datetime"),
+    )
+
+    for event_id, event in repl.iterrows():
+
+        actor_id = str(event["actor_cow"])
+        reactor_id = str(event["reactor_cow"])
+
+        t = event["time"]
+        dt = pd.Timedelta(seconds=event["bout_interval"])
+
+        start = t - pd.Timedelta(seconds=window_s)
+        end = t + dt + pd.Timedelta(seconds=window_s)
+
+        # Extract both trajectories
+        actor = cow_positions.get(actor_id, empty).loc[start:end].dropna()
+        reactor = cow_positions.get(reactor_id, empty).loc[start:end].dropna()
+
+        # Match positions at identical timestamps
+        matched = actor.join(
+            reactor,
+            how="inner",
+            lsuffix="_actor",
+            rsuffix="_reactor",
+        )
+
+        # Cow-to-cow distances
+        d_cows = np.hypot(
+            matched["x_actor"] - matched["x_reactor"],
+            matched["y_actor"] - matched["y_reactor"],
+        )
+
+        # Cow-to-bin distances
+        bx, by = event["centroid_x"], event["centroid_y"]
+
+        d_actor_bin = pd.Series(dtype=float)
+        d_reactor_bin = pd.Series(dtype=float)
+
+        if pd.notna(bx) and pd.notna(by):
+            d_actor_bin = np.hypot(actor["x"] - bx, actor["y"] - by)
+            d_reactor_bin = np.hypot(reactor["x"] - bx, reactor["y"] - by)
+
+        # Store statistics for this event
+        event_statistics.append({
+            "event_id": event_id,
+            "actor_cow": actor_id,
+            "reactor_cow": reactor_id,
+            "bin": event["bin"],
+            "time": t,
+            "bout_interval": event["bout_interval"],
+
+            "n_actor": len(actor),
+            "n_reactor": len(reactor),
+            "n_matches": len(matched),
+
+            "cow_min_m": d_cows.min(),
+            "cow_mean_m": d_cows.mean(),
+            "cow_max_m": d_cows.max(),
+
+            "actor_bin_min_m": d_actor_bin.min(),
+            "actor_bin_mean_m": d_actor_bin.mean(),
+            "actor_bin_max_m": d_actor_bin.max(),
+
+            "reactor_bin_min_m": d_reactor_bin.min(),
+            "reactor_bin_mean_m": d_reactor_bin.mean(),
+            "reactor_bin_max_m": d_reactor_bin.max(),
+        })
+
+    return pd.DataFrame(event_statistics)
