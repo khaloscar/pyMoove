@@ -41,13 +41,18 @@ def load_positions_parquet(filePath: str | Path)->pd.DataFrame:
     filePath: Path to file str or Path"""
     dataset = pd.read_parquet(filePath)
 
-    dataset["IDs"] = (
-        dataset["IDs"].astype("string")
-    )
-    dataset["NIDs"] = (
-        dataset["NIDs"].astype("string")
-    )
+    # Consistent type format for ID's
+    dataset["IDs"] = dataset["IDs"].astype("string")
+    dataset["NIDs"] = dataset["NIDs"].astype("string")
+
+    # Consistent time-format to utc
+    dataset["datetime"] = dataset["datetime"].dt.tz_convert("UTC")
+
     return dataset
+
+def load_bin_stats_parquet(filePath: str | pd.DataFrame)->-pd.DataFrame:
+    """Load pre-computed feed-bin position statistics parquet."""
+    return pd.read_parquet(filePath)
 
 
 def load_replacements_parquet(filePath: str | Path)->pd.DataFrame:
@@ -56,19 +61,41 @@ def load_replacements_parquet(filePath: str | Path)->pd.DataFrame:
 
     dataset = pd.read_parquet(filePath)
 
-    dataset["actor_cow"] = (
-        dataset["actor_cow"].astype("string")
-    )
-    dataset["reactor_cow"] = (
-        dataset["reactor_cow"].astype("string")
-    )
+    # Consistent type format for ID's
+    dataset["actor_cow"] = dataset["actor_cow"].astype("string")
+    dataset["reactor_cow"] = dataset["reactor_cow"].astype("string")
+
+    # Consistent time-format to utc
+    dataset["time"] = dataset["time"].dt.tz_convert("UTC")
 
     return dataset
 
 
 def load_feeding_parquet(filePath: str | Path)->pd.DataFrame:
     """Load feeding parquet"""
-    return pd.read_parquet(filePath)
+
+    dataset = pd.read_parquet(filePath)
+
+    #NOTE: Perhaps more convenient to have this already performed from the scritps..
+    # Extract date from filename, e.g. Feed_251010.parquet
+    date = pd.to_datetime(
+        Path(filePath).stem.split("_")[-1],
+        format="%y%m%d"
+    ).strftime("%Y-%m-%d")
+
+    # Combine date with feeding start time and convert to UTC
+    dataset["start_time"] = (
+        pd.to_datetime(date + " " + dataset["start_time"].astype(str))
+        .dt.tz_localize("Europe/Stockholm")
+        .dt.tz_convert("UTC")
+    )
+
+    # Calculate end time using visit duration (handles midnight crossing)
+    dataset["end_time"] = (
+        dataset["start_time"]
+        + pd.to_timedelta(dataset["duration"], unit="s")
+    )
+    return dataset
 
 
 def load_processed_dataset(dataFolderPath: str | Path)->datasetFull:
@@ -122,7 +149,7 @@ def load_processed_dataset(dataFolderPath: str | Path)->datasetFull:
 #################################################################################
 ## Raw Loading of data
 #################################################################################
-def load_positions_file(filePath: str | Path) -> pd.DataFrame:
+def load_raw_positions_file(filePath: str | Path) -> pd.DataFrame:
     """
     Load a compressed Pozyx JSON file into a DataFrame
     Assumption: 
@@ -143,14 +170,14 @@ def load_positions_file(filePath: str | Path) -> pd.DataFrame:
     return pd.concat([df, coords], axis=1)
 
 
-def load_positions_folder(folderPath: str | Path)->pd.DataFrame:
+def load_raw_positions_folder(folderPath: str | Path)->pd.DataFrame:
     """Loads all .gz file from a folder
     Assumption: The folder is not empty and contains at least one json.gz"""
 
     folder = Path(folderPath)
 
     pandaDataFrames = [
-        load_positions_file(filePath=filePath)
+        load_raw_positions_file(filePath=filePath)
         for filePath in sorted(folder.glob("*.json.gz"))
     ]
 
@@ -159,24 +186,24 @@ def load_positions_folder(folderPath: str | Path)->pd.DataFrame:
     return fullFrame
 
 
-def load_delpro_tag_mapping(filePath: str | Path)->pd.DataFrame:
+def load_raw_delpro_tag_mapping(filePath: str | Path)->pd.DataFrame:
     """Loads xlsx file for delpro tags mapping"""
     return pd.read_excel(filePath)
 
 
-def load_feeding_bin_visits(filePath: str | Path)->pd.DataFrame:
+def load_raw_feeding_bin_visits(filePath: str | Path)->pd.DataFrame:
     """Loads feeding bin visits data
     sheet_name="Per visit", since the excel sheet comes in two forms, per visit and per day"""
     return pd.read_excel(filePath, sheet_name="Per visit")
 
 
-def load_zone_info(filePath: str | Path)->pd.DataFrame:
+def load_raw_zone_info(filePath: str | Path)->pd.DataFrame:
     """Loads zone_info.csv file
     column separator used here ';', initially"""
     return pd.read_csv(filePath, sep=";")
 
 
-def load_dataset(dataFolderPath: str | Path) -> dict[str, pd.DataFrame]:
+def load_raw_dataset(dataFolderPath: str | Path) -> dict[str, pd.DataFrame]:
     """Load the positioning, feeding, tag mapping and zone datasets."""
     #NOTE: Hardcoded file and folder names based on initial data,
     #TODO: Generalize this function to ideally accept 'any' path to a full dataset 
@@ -184,10 +211,10 @@ def load_dataset(dataFolderPath: str | Path) -> dict[str, pd.DataFrame]:
     dataFolderPath = Path(dataFolderPath)
 
     datasetDict = {
-        "positions": load_positions_folder(dataFolderPath / "RTLS 20251010"),
-        "mapping": load_delpro_tag_mapping(dataFolderPath / "Delpro taggar 20251010.xlsx"),
-        "feeding": load_feeding_bin_visits(dataFolderPath / "Utfodring 20251010.xlsx"),
-        "zones": load_zone_info(dataFolderPath / "zone_info.csv"),
+        "positions": load_raw_positions_folder(dataFolderPath / "RTLS 20251010"),
+        "mapping": load_raw_delpro_tag_mapping(dataFolderPath / "Delpro taggar 20251010.xlsx"),
+        "feeding": load_raw_feeding_bin_visits(dataFolderPath / "Utfodring 20251010.xlsx"),
+        "zones": load_raw_zone_info(dataFolderPath / "zone_info.csv"),
     }
 
     return datasetDict

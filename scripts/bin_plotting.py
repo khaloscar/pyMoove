@@ -21,7 +21,10 @@ DATA_DIR = (
     else SCRIPTS_DIR.parent / "data"
 )
 
-data = mooveIO.load_processed_dataset(DATA_DIR)
+#NOTE: Ändrat i scriptet så att jag kan spara datan sen som en parquet och ladda senare
+#NOTE: Vore bra om det fanns en funktion att använda där man kan skicka in replacements och positions och 
+#NOTE: få ut en ny dataFrame som man sen kan spara som en parquet.
+# data = mooveIO.load_processed_dataset(DATA_DIR)
 
 # positions columns: NIDs, IDs, Time, x, y, Inter, velocity, datetime
 # replacements columns: reactor_cow, bin, time, actor_cow, bout_interval
@@ -505,24 +508,43 @@ def plot_bin_feeding_positions(
     return fig, ax
 
 
+#NOTE: Ändrat i scriptet så att jag kan spara datan sen som en parquet och ladda senare
+#NOTE: Vore bra om det fanns en funktion att använda där man kan skicka in replacements och positions och 
+#NOTE: få ut en ny dataFrame som man sen kan spara som en parquet.
+# if __name__ == "__main__":
+#     # Load filtered zones for farm layout
+#     zones_path = DATA_DIR / "zones_filtered.csv"
+#     if not zones_path.exists():
+#         zones_path = DATA_DIR / "zone_info.csv"
+#         zones = zone_info.get_zone_info(zones_path)
+#     else:
+#         zones = zones_path
+#
+#     # Example 1: Calculate centroids and standard deviations for a list of bins
+#     bins_to_analyze = range(1, 21)
+#     bin_stats = calculate_bin_position_statistics(data, bins=bins_to_analyze)
+#     print("\n--- Bin Position Statistics ---")
+#     print(bin_stats.to_string(index=False))
+#
+#     # Example 2: Plot all feeding events for a specific bin
+#     # target_bin = 2
+#     # fig, ax = plot_bin_feeding_positions(data, zones, bin_id=target_bin, color_by_cow=True)
+#
+#     # Example 3: Plot a single feeding event by index (uncomment to use):
+#     # fig, ax = plot_feeding_event(data, zones, event_index=0)
+
+#NOTE: Detta är den nya __main__ jag använder // Oscar
 if __name__ == "__main__":
-    # Load filtered zones for farm layout
-    zones_path = DATA_DIR / "zones_filtered.csv"
-    if not zones_path.exists():
-        zones_path = DATA_DIR / "zone_info.csv"
-        zones = zone_info.get_zone_info(zones_path)
-    else:
-        zones = zones_path
+    data = mooveIO.load_processed_dataset(DATA_DIR)
 
-    # Example 1: Calculate centroids and standard deviations for a list of bins
-    bins_to_analyze = range(1, 21)
-    bin_stats = calculate_bin_position_statistics(data, bins=bins_to_analyze)
-    print("\n--- Bin Position Statistics ---")
+    # Calculate statistics for all feeding bins
+    bins = sorted(data["feeding"]["bin"].dropna().unique())
+
+    bin_stats = calculate_bin_position_statistics(data, bins)
+
+    # Save results to Parquet
+    output = DATA_DIR / "bin_position_stats.parquet"
+    bin_stats.to_parquet(output, index=False)
+
     print(bin_stats.to_string(index=False))
-
-    # Example 2: Plot all feeding events for a specific bin
-    # target_bin = 2
-    # fig, ax = plot_bin_feeding_positions(data, zones, bin_id=target_bin, color_by_cow=True)
-
-    # Example 3: Plot a single feeding event by index (uncomment to use):
-    # fig, ax = plot_feeding_event(data, zones, event_index=0)
+    print(f"\nSaved bin statistics to {output}")
