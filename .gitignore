@@ -41,3 +41,6 @@ uv.lock
 
 # Images
 *.png
+
+# Test file
+test.ipynb
