@@ -9,7 +9,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import ast
-from pyMoove.calculations import get_bin_feeding_positions, filter_bin_position_outliers
+from pyMoove.calculations import (
+    get_bin_feeding_positions,
+    filter_bin_position_outliers,
+    calculate_bin_position_statistics,
+)
 
 def plot_zones(
     zones: pd.DataFrame | str | Path,
@@ -632,6 +636,146 @@ def plot_bin_feeding_positions(
     # Position legend cleanly (ncol=2 if many cows)
     legend_cols = 2 if color_by_cow and not bin_pos.empty and bin_pos["cow_id"].nunique() > 6 else 1
     ax.legend(loc="upper right", frameon=True, fontsize=8, ncol=legend_cols)
+
+    if show:
+        plt.show()
+
+    return fig, ax
+
+def plot_bins(
+    data: dict[str, pd.DataFrame],
+    zones: pd.DataFrame | str | Path,
+    bins: list[int] | int | range | None = None,
+    tz: str = "Europe/Stockholm",
+    outlier_confidence: float = 0.9999,
+    show_ellipse: bool = True,
+    show: bool = True,
+) -> tuple[plt.Figure, plt.Axes]:
+    """Plot all bin feeding positions on top of the farm layout.
+
+    Calls :func:`~pyMoove.calculations.calculate_bin_position_statistics` to
+    compute each bin's spatial centroid and standard deviation, then overlays
+    those positions on the farm layout produced by :func:`plot_zones`.
+
+    Each bin is rendered as:
+
+    * A **star marker** (★) at the centroid.
+    * An **ellipse** spanning ±1 standard deviation in X and Y (when
+      ``show_ellipse=True`` and sufficient data are available).
+    * An **annotation** with the bin number placed just above the centroid.
+
+    Parameters
+    ----------
+    data:
+        Processed dataset containing ``'feeding'`` and ``'positions'``
+        DataFrames (the standard ``dict`` produced by :func:`~pyMoove.io.load`).
+    zones:
+        Farm layout zones DataFrame, or the path to a zones CSV written by
+        :func:`~pyMoove.io.get_zone_info`.
+    bins:
+        Bins to include.  Accepts a single integer, a list of integers, or a
+        ``range`` object.  If *None*, all unique bins present in
+        ``data['feeding']`` are used.
+    tz:
+        Local timezone of the feeder timestamps (default: ``'Europe/Stockholm'``).
+    outlier_confidence:
+        Confidence level passed to
+        :func:`~pyMoove.calculations.calculate_bin_position_statistics` for
+        robust outlier rejection (default: 0.9999).
+    show_ellipse:
+        When *True* (default), draw a ±1 SD ellipse around each centroid.
+    show:
+        Whether to call ``plt.show()`` before returning (default: *True*).
+
+    Returns
+    -------
+    tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
+        The figure and axes, allowing further customization or saving.
+    """
+    # ------------------------------------------------------------------ #
+    # Determine which bins to plot                                         #
+    # ------------------------------------------------------------------ #
+    if bins is None:
+        bins = sorted(data["feeding"]["bin"].dropna().unique().tolist())
+    elif isinstance(bins, (int, str)):
+        bins = [int(bins)]
+    else:
+        bins = [int(b) for b in bins]
+
+    # ------------------------------------------------------------------ #
+    # Compute statistics for every requested bin                           #
+    # ------------------------------------------------------------------ #
+    bin_stats = calculate_bin_position_statistics(
+        data,
+        bins=bins,
+        tz=tz,
+        outlier_confidence=outlier_confidence,
+    )
+
+    # ------------------------------------------------------------------ #
+    # Draw the farm layout                                                 #
+    # ------------------------------------------------------------------ #
+    fig, ax = plot_zones(zones, show=False, legend=True)
+
+    # ------------------------------------------------------------------ #
+    # Overlay each bin                                                     #
+    # ------------------------------------------------------------------ #
+    # Use a qualitative colour cycle so adjacent bins are visually distinct
+    cmap = plt.get_cmap("tab20" if len(bins) > 10 else "tab10")
+    n_colors = cmap.N
+
+    for i, row in bin_stats.iterrows():
+        bin_id = int(row["bin"])
+        cx = row["centroid_x"]
+        cy = row["centroid_y"]
+
+        if pd.isna(cx) or pd.isna(cy):
+            continue  # no position data for this bin
+
+        color = cmap(i % n_colors)
+
+        # Centroid marker
+        ax.scatter(
+            cx,
+            cy,
+            marker=".",
+            s=120,
+            color=color,
+            edgecolor="black",
+            linewidth=0.7,
+            zorder=5,
+            label=f"Bin {bin_id} ({row['num_inliers']:,} fixes)",
+        )
+
+        # Bin label
+        ax.annotate(
+            str(bin_id),
+            xy=(cx, cy),
+            xytext=(-8, 0),
+            textcoords="offset points",
+            ha="right",
+            va="center",
+            fontsize=7,
+            fontweight="bold",
+            color="black",
+            zorder=6,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Legend & labels                                                      #
+    # ------------------------------------------------------------------ #
+    ax.set_title("Feeding bin positions")
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ncol = 2 if len(bins) > 8 else 1
+        ax.legend(
+            handles=handles,
+            labels=labels,
+            loc="upper right",
+            fontsize=7,
+            frameon=True,
+            ncol=ncol,
+        )
 
     if show:
         plt.show()
