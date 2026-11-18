@@ -126,7 +126,6 @@ def inspect_replacement_event_statistics(
         time_before: float = 0.0,
         time_after: float = 0.0,
 )->pd.DataFrame:
-    #TODO: time_start -> kolla före repl. event börjar, ist. för extra padding runtomkring ett event.
 
     event_statistics = []
 
@@ -218,6 +217,7 @@ def inspect_replacement_event_statistics(
 
     return pd.DataFrame(event_statistics)
 
+
 def summarize_event_coverage(stats: pd.DataFrame)->None:
     """
     Summarize and print positional data availability for replacement events.
@@ -226,7 +226,7 @@ def summarize_event_coverage(stats: pd.DataFrame)->None:
     inspect_replacement_event_statistics()
 
     Events are defined as invalid when no synchronized positional data
-    are available for both the reactor and the actor cow.
+    are available for both the reactor and the actor cow. Meaning, at least one pair of data is synchronized.
     """
 
     total_events = stats.shape[0]
@@ -236,7 +236,7 @@ def summarize_event_coverage(stats: pd.DataFrame)->None:
     only_reactor = (stats["n_actor"] == 0) & (stats["n_reactor"] > 0)
     neither = (stats["n_actor"] == 0) & (stats["n_reactor"] == 0)
     no_sync = both_valid & (stats["n_matches"] == 0)
-    invalid = only_actor | only_reactor | neither | no_sync
+    invalid = only_actor | only_reactor | neither | no_sync # = ~matching
 
     print("\n\n")
     print("Event position summary:")
@@ -249,4 +249,3 @@ def summarize_event_coverage(stats: pd.DataFrame)->None:
     print(f"Neither cow has positions: {neither.sum()}")
     print(f"Amount of invalid events: {invalid.sum()}")
     print("\n\n")
-
