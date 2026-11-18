@@ -249,3 +249,17 @@ def summarize_event_coverage(stats: pd.DataFrame)->None:
     print(f"Neither cow has positions: {neither.sum()}")
     print(f"Amount of invalid events: {invalid.sum()}")
     print("\n\n")
+
+
+def find_boxplot_outliers(stats: pd.DataFrame, column: str)->pd.DataFrame:
+
+    q1, q3 = stats[column].quantile([0.25, 0.75])
+    iqr = q3 - q1
+
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+
+    outlierMask = (stats[column] < lower) | (stats[column] > upper)
+    outliers = stats.loc[outlierMask]
+
+    return outliers

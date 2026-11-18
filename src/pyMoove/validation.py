@@ -2,12 +2,27 @@
 import pandas as pd
 
 def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->None:
+    """
+    Verify that a given DataFrame contains at least the expected columns.
+    I.e. additional columns are permitted
+
+    Parameters
+    ----------
+        df: pd.DataFrame
+        expected_columns: list[str]
+        name: str
+
+    Raises
+    -------
+        ValueError: The df does not contain all of the expected columns
+        Nothing: The df contains all of the expected columns
+    """
 
     missing_columns = set(expected_columns) - set(df.columns)
     if missing_columns:
         raise ValueError(
-            f"Invalid {name} DataFrame."
-                f"missing_columns columns: {sorted(missing_columns)}\n"
+            f"Invalid {name} DataFrame.\n"
+                f"Missing columns: {sorted(missing_columns)}\n"
                 f"Expected columns: {expected_columns}\n"
                 f"Actual columns: {df.columns.to_list()}")
 
@@ -46,6 +61,7 @@ def check_positions_dataframe_structure(df: pd.DataFrame)->None:
 
 def check_feeding_dataframe_structure(df: pd.DataFrame) -> None:
     """Verify that a DataFrame has the expected feeding-data columns."""
+
     expected_columns = [
         "cow",
         "bin",
@@ -63,6 +79,7 @@ def check_feeding_dataframe_structure(df: pd.DataFrame) -> None:
 
 def check_bin_stats_dataframe_structure(df: pd.DataFrame) -> None:
     """Verify that a DataFrame has the expected feeding-bin statistics columns."""
+
     expected_columns = [
         "bin",
         "centroid_x",
@@ -74,6 +91,7 @@ def check_bin_stats_dataframe_structure(df: pd.DataFrame) -> None:
 
 def check_replacement_statistics_dataframe_structure(df: pd.DataFrame) -> None:
     """Verify that a DataFrame has the expected replacement-statistics columns."""
+
     expected_columns = [
         "event_id",
         "actor_cow",
