@@ -2,6 +2,8 @@
 import pandas as pd
 import numpy as np
 
+#TODO: 
+
 def inspect_dataframe(df: pd.DataFrame, name: str = "Dataset")->None:
 
     print(f"\n{'='*60}")
@@ -47,8 +49,6 @@ def inspect_positions(df: pd.Dataframe, name: str = "Positions data")->None:
     dtype: int64
     """
 
-    # Figure out number of cows in this set
-    # 
 
     #TODO: ??
     print(f"TODO: inspect_positions()")
@@ -119,11 +119,12 @@ def inspect_cow_statistict(ID: str, positions: pd.DataFrame, replacements: pd.Da
         print(f"Maximum velocity: {cow_positions['velocity'].max():.3f} m/s")
 
 
-def inspect_replacement_event_statistict(
+def inspect_replacement_event_statistics(
         positions: pd.DataFrame,
         replacements: pd.DataFrame,
         bin_stats: pd.DataFrame,
-        window_s: float = 0.0,
+        time_before: float = 0.0,
+        time_after: float = 0.0,
 )->pd.DataFrame:
 
     event_statistics = []
@@ -155,16 +156,18 @@ def inspect_replacement_event_statistict(
         t = event["time"]
         dt = pd.Timedelta(seconds=event["bout_interval"])
 
-        start = t - pd.Timedelta(seconds=window_s)
-        end = t + dt + pd.Timedelta(seconds=window_s)
+        # Look at a replacement event, 
+        # Can look at a some time before the event and after the event
+        start = t - pd.Timedelta(seconds=time_before)
+        end = t + dt + pd.Timedelta(seconds=time_after)
 
         # Extract both trajectories
-        actor = cow_positions.get(actor_id, empty).loc[start:end].dropna()
-        reactor = cow_positions.get(reactor_id, empty).loc[start:end].dropna()
+        actor_pos = cow_positions.get(actor_id, empty).loc[start:end].dropna()
+        reactor_pos = cow_positions.get(reactor_id, empty).loc[start:end].dropna()
 
         # Match positions at identical timestamps
-        matched = actor.join(
-            reactor,
+        matched = actor_pos.join(
+            reactor_pos,
             how="inner",
             lsuffix="_actor",
             rsuffix="_reactor",
@@ -183,8 +186,8 @@ def inspect_replacement_event_statistict(
         d_reactor_bin = pd.Series(dtype=float)
 
         if pd.notna(bx) and pd.notna(by):
-            d_actor_bin = np.hypot(actor["x"] - bx, actor["y"] - by)
-            d_reactor_bin = np.hypot(reactor["x"] - bx, reactor["y"] - by)
+            d_actor_bin = np.hypot(actor_pos["x"] - bx, actor_pos["y"] - by)
+            d_reactor_bin = np.hypot(reactor_pos["x"] - bx, reactor_pos["y"] - by)
 
         # Store statistics for this event
         event_statistics.append({
@@ -195,8 +198,8 @@ def inspect_replacement_event_statistict(
             "time": t,
             "bout_interval": event["bout_interval"],
 
-            "n_actor": len(actor),
-            "n_reactor": len(reactor),
+            "n_actor": len(actor_pos),
+            "n_reactor": len(reactor_pos),
             "n_matches": len(matched),
 
             "cow_min_m": d_cows.min(),
@@ -213,3 +216,36 @@ def inspect_replacement_event_statistict(
         })
 
     return pd.DataFrame(event_statistics)
+
+
+def summarize_event_coverage(stats: pd.DataFrame)->None:
+    """
+    Summarize and print positional data availability for replacement events.
+
+    Requires the columns n_actor, n_reactor and n_matches from 
+    inspect_replacement_event_statistics()
+
+    Events are defined as invalid when no synchronized positional data
+    are available for both the reactor and the actor cow. Meaning, at least one pair of data is synchronized.
+    """
+
+    total_events = stats.shape[0]
+    matching = stats["n_matches"] > 0
+    both_valid = (stats["n_actor"] > 0) & (stats["n_reactor"] > 0)
+    only_actor = (stats["n_actor"] > 0) & (stats["n_reactor"] == 0)
+    only_reactor = (stats["n_actor"] == 0) & (stats["n_reactor"] > 0)
+    neither = (stats["n_actor"] == 0) & (stats["n_reactor"] == 0)
+    no_sync = both_valid & (stats["n_matches"] == 0)
+    invalid = only_actor | only_reactor | neither | no_sync # = ~matching
+
+    print("\n\n")
+    print("Event position summary:")
+    print(f"Total events: {total_events}")
+    print(f"Events with synchronized positions: {matching.sum()}")
+    print(f"Both cows have at least one valid position: {both_valid.sum()}")
+    print(f"Both present, but no matching timestamps: {no_sync.sum()}")
+    print(f"Only actor has positions: {only_actor.sum()}")
+    print(f"Only reactor has positions: {only_reactor.sum()}")
+    print(f"Neither cow has positions: {neither.sum()}")
+    print(f"Amount of invalid events: {invalid.sum()}")
+    print("\n\n")

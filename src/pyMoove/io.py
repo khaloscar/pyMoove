@@ -16,20 +16,17 @@ class datasetFull(TypedDict):
     replacements: pd.DataFrame
 
 #NOTE: Potential issue: 24h data-set may be fine to load completely into RAM, what if data-set spans several days or something? 
-#NOTE: Assumptions: Just load whatever data is available, it might be or might not be cleaned right now, decide at a later point
-#NOTE: Combining and standardizing columm names should be done separately
+#TODO: The loading of full datasets uses hardcoded filePaths, should be generalized once 
+#       a structure of the initial data has been agreed upon.
 
-#NOTE: Position data IO
-#NOTE: Initial profiling shows that loading times are dominated by the individual loading of the files
-#NOTE: Initial profiling shows in addition that the inividual file loading is dominated by conversion to pd.DataFrame
-#NOTE: Ideas to speed up the process: Try a few approaches of converting to pd.DataFrame, 
-#NOTE: Parquet could be used to, worked well for me in the bachelors theis, this is another filetype that is faster
-#NOTE: End goal: Individual and unified DataFrames, which can be used to look at at handle stuff.
 
-#TODO: Generalize this dataset loading function to ideally accept 'any' path to a full dataset 
-#TODO: Saving functionality once transformed, loading is slow, idea parquet files have worked for me before.
-#TODO: -> Saving + some additional loading functionality, once we have the parquet format
-#NOTE: Issues may arrise once the dataset grows beyond a single day, considerations to filesize must be made
+#################################################################################
+## Saving DataFrames functionality
+#################################################################################
+
+def save_dataframe_to_parquet(df: pd.DataFrame, filePath: str | Path)->None:
+
+    df.to_parquet(path=filePath)
 
 #################################################################################
 ## Processed data loading
@@ -121,6 +118,7 @@ def load_processed_dataset(dataFolderPath: str | Path)->datasetFull:
     folder = Path(dataFolderPath)
 
     #NOTE: Hardcoded for now
+    #TODO: eventually fix hardcoding of filePaths
     dataset = {
         "positions": load_positions_parquet(folder/"rtls_cleaned_anispace.parquet"),
         "feeding": load_feeding_parquet(
@@ -206,7 +204,7 @@ def load_raw_zone_info(filePath: str | Path)->pd.DataFrame:
 def load_raw_dataset(dataFolderPath: str | Path) -> dict[str, pd.DataFrame]:
     """Load the positioning, feeding, tag mapping and zone datasets."""
     #NOTE: Hardcoded file and folder names based on initial data,
-    #TODO: Generalize this function to ideally accept 'any' path to a full dataset 
+    #TODO: eventually fix hardcoding of filePaths
 
     dataFolderPath = Path(dataFolderPath)
 
