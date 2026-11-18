@@ -1,4 +1,4 @@
-"""Plot farm zones and cow trajectories around feeding replacements."""
+﻿"""Plot farm zones and cow trajectories around feeding replacements."""
 
 from collections.abc import Mapping
 import matplotlib.pyplot as plt
@@ -172,7 +172,7 @@ def plot_replacement_example(
         plot_zones(zones, ax=ax, show=False, legend=False)
 
     # Plot the feeding bin position and spatial distribution
-    if bin_statistics is not None:
+    if bin_statistics  is not None:
         bin_stats = bin_statistics.loc[
             bin_statistics["bin"] == event["bin"]
         ]
@@ -182,31 +182,14 @@ def plot_replacement_example(
 
             centroid_x = bin_stats["centroid_x"]
             centroid_y = bin_stats["centroid_y"]
-            std_x = bin_stats["std_x"]
-            std_y = bin_stats["std_y"]
 
             if pd.notna(centroid_x) and pd.notna(centroid_y):
-                # Plot the bin's spatial standard deviation
-                if pd.notna(std_x) and pd.notna(std_y):
-                    ellipse = Ellipse(
-                        xy=(centroid_x, centroid_y),
-                        width=2 * std_x,
-                        height=2 * std_y,
-                        facecolor="#e31a1c",
-                        edgecolor="#b30000",
-                        alpha=0.20,
-                        linewidth=1.5,
-                        zorder=2,
-                        label=f"Bin {event['bin']} ±1 SD",
-                    )
-                    ax.add_patch(ellipse)
-
                 # Plot the bin centroid
                 ax.scatter(
                     centroid_x,
                     centroid_y,
                     marker="*",
-                    s=250,
+                    s=120,
                     color="#e31a1c",
                     edgecolor="black",
                     linewidth=0.8,
@@ -371,6 +354,7 @@ def plot_feeding_event(
     zones: pd.DataFrame | str | Path,
     event_index: int = 0,
     tz: str = "Europe/Stockholm",
+    bin_statistics: pd.DataFrame | None = None,
     show: bool = True,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Plot a single cow's trajectory during one feeding event on top of farm zones.
@@ -385,6 +369,11 @@ def plot_feeding_event(
         Row index of the feeding event to plot (default: 0).
     tz:
         Timezone of the feeder timestamps (default: 'Europe/Stockholm').
+    bin_statistics:
+        Optional DataFrame returned by
+        :func:`~pyMoove.calculations.calculate_bin_position_statistics`.
+        When provided, the centroid and ±1 SD ellipse for the event's bin
+        are drawn on the plot (same style as :func:`plot_replacement_example`).
     show:
         Whether to display the plot with plt.show().
 
@@ -447,6 +436,31 @@ def plot_feeding_event(
 
     # Step 3: Plot positional data on top of the plot created by zone_info.py
     fig, ax = plot_zones(zones, show=False)
+
+    # Plot the feeding bin position and spatial distribution
+    if bin_statistics is not None:
+        bin_stats = bin_statistics.loc[bin_statistics["bin"] == bin_nr]
+        if not bin_stats.empty:
+            bin_stats = bin_stats.iloc[0]
+            centroid_x = bin_stats["centroid_x"]
+            centroid_y = bin_stats["centroid_y"]
+            std_x = bin_stats["std_x"]
+            std_y = bin_stats["std_y"]
+
+            if pd.notna(centroid_x) and pd.notna(centroid_y):
+
+                # Plot the bin centroid
+                ax.scatter(
+                    centroid_x,
+                    centroid_y,
+                    marker="*",
+                    s=120,
+                    color="#e31a1c",
+                    edgecolor="black",
+                    linewidth=0.8,
+                    zorder=6,
+                    label=f"Bin {bin_nr} centroid",
+                )
 
     if not cow_positions.empty:
         # Plot trajectory line and fixes
@@ -519,8 +533,8 @@ def plot_bin_feeding_positions(
     color_by_cow: bool = True,
     tz: str = "Europe/Stockholm",
     show: bool = True,
-    outlier_confidence: float = 0.999,
-    show_outliers: bool = True,
+    outlier_confidence: float = 0.9999,
+    filter_outliers: bool = True,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Plot all positional fixes during all feeding events for a specific bin.
 
@@ -537,8 +551,24 @@ def plot_bin_feeding_positions(
         are plotted with a single semi-transparent color to show spatial density.
     tz:
         Timezone of the feeder timestamps (default: 'Europe/Stockholm').
+    bin_statistics:
+        DataFrame returned by
+        :func:`~pyMoove.calculations.calculate_bin_position_statistics`.
+        When ``filter_outliers=True`` and this is provided, the centroid is
+        read directly from this DataFrame (avoiding a redundant computation).
+        When ``filter_outliers=True`` and this is *not* provided,
+        :func:`~pyMoove.calculations.calculate_bin_position_statistics` is
+        called automatically to obtain the centroid.
     show:
         Whether to display the plot with plt.show().
+    filter_outliers:
+        If True (default), spatial outliers are detected; inliers are plotted
+        in a single colour and outliers as grey crosses.  The centroid is
+        always derived from
+        :func:`~pyMoove.calculations.calculate_bin_position_statistics`
+        (using ``bin_statistics`` if supplied, or computed on the fly).
+        If False, outlier detection is skipped and every position fix is
+        plotted the same way as inliers (respecting ``color_by_cow``).
 
     Returns
     -------
@@ -571,14 +601,19 @@ def plot_bin_feeding_positions(
             bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
         )
     else:
-        inliers, outliers, _, _ = filter_bin_position_outliers(
-            bin_pos, confidence=outlier_confidence
-        )
-        print(f"Total position fixes: {len(bin_pos)}")
-        print(
-            f"Retained fixes:       {len(inliers)} "
-            f"({len(outliers)} flagged as outliers; confidence={outlier_confidence:.1%})"
-        )
+        if filter_outliers:
+            inliers, outliers, _, _ = filter_bin_position_outliers(
+                bin_pos, confidence=outlier_confidence
+            )
+            print(f"Total position fixes: {len(bin_pos)}")
+            print(
+                f"Retained fixes:       {len(inliers)} "
+                f"({len(outliers)} flagged as outliers; confidence={outlier_confidence:.1%})"
+            )
+        else:
+            inliers = bin_pos
+            outliers = bin_pos.iloc[0:0]  # empty DataFrame with same columns
+            print(f"Total position fixes: {len(bin_pos)} (outlier filtering disabled)")
 
         if not inliers.empty:
             mean_x = inliers["x"].mean()
@@ -598,16 +633,16 @@ def plot_bin_feeding_positions(
                     ax.scatter(
                         subset["x"], subset["y"],
                         color=cmap(i % cmap.N), s=18, alpha=0.6,
-                        zorder=4, label=f"Cow {cow} ({len(subset)} inliers)",
+                        zorder=4, label=f"Cow {cow} ({len(subset)} fixes)",
                     )
             else:
                 ax.scatter(
                     inliers["x"], inliers["y"],
                     color="#d9381e", s=18, alpha=0.5, zorder=4,
-                    label=f"Inlier fixes (N={len(inliers)})",
+                    label=f"Inlier fixes (N={len(inliers)})" if filter_outliers else f"Position fixes (N={len(inliers)})",
                 )
 
-            if show_outliers and not outliers.empty:
+            if not outliers.empty:
                 ax.scatter(
                     outliers["x"], outliers["y"],
                     color="#888888", marker="x", s=42, linewidth=1.5,
@@ -615,12 +650,26 @@ def plot_bin_feeding_positions(
                     label=f"Rejected outliers (N={len(outliers)})",
                 )
 
-            # The reported centroid is calculated from retained fixes only.
+            # Centroid: when filter_outliers=True, derive from bin_statistics.
+            # Use the caller-supplied DataFrame if provided, otherwise compute it now.
+            if filter_outliers:
+                _stats = calculate_bin_position_statistics(
+                    data, bins=bin_id, tz=tz, outlier_confidence=outlier_confidence
+                )
+                bin_row = _stats.loc[_stats["bin"] == bin_id]
+                if not bin_row.empty and pd.notna(bin_row.iloc[0]["centroid_x"]):
+                    centroid_x = bin_row.iloc[0]["centroid_x"]
+                    centroid_y = bin_row.iloc[0]["centroid_y"]
+                else:
+                    centroid_x, centroid_y = mean_x, mean_y
+            else:
+                centroid_x, centroid_y = mean_x, mean_y
+
             ax.scatter(
-                mean_x, mean_y,
-                marker="*", s=160, color="#ffd700",
+                centroid_x, centroid_y,
+                marker="*", s=120, color="#ffd700",
                 edgecolor="#222222", linewidth=1.2, zorder=6,
-                label=f"Filtered bin centroid ({mean_x:.1f}, {mean_y:.1f} m)",
+                label=f"Bin centroid ({centroid_x:.1f}, {centroid_y:.1f} m)",
             )
         else:
             ax.text(
@@ -643,45 +692,38 @@ def plot_bin_feeding_positions(
     return fig, ax
 
 def plot_bins(
-    data: dict[str, pd.DataFrame],
     zones: pd.DataFrame | str | Path,
+    bin_statistics: pd.DataFrame,
     bins: list[int] | int | range | None = None,
-    tz: str = "Europe/Stockholm",
-    outlier_confidence: float = 0.9999,
     show_ellipse: bool = True,
     show: bool = True,
 ) -> tuple[plt.Figure, plt.Axes]:
-    """Plot all bin feeding positions on top of the farm layout.
+    """Plot bin feeding positions on top of the farm layout.
 
-    Calls :func:`~pyMoove.calculations.calculate_bin_position_statistics` to
-    compute each bin's spatial centroid and standard deviation, then overlays
-    those positions on the farm layout produced by :func:`plot_zones`.
+    Overlays the pre-calculated bin centroids and spatial spread from
+    *bin_statistics* on the farm layout produced by :func:`plot_zones`.
 
     Each bin is rendered as:
 
-    * A **star marker** (★) at the centroid.
+    * A **dot marker** at the centroid.
     * An **ellipse** spanning ±1 standard deviation in X and Y (when
       ``show_ellipse=True`` and sufficient data are available).
-    * An **annotation** with the bin number placed just above the centroid.
+    * An **annotation** with the bin number placed to the left of the marker.
 
     Parameters
     ----------
-    data:
-        Processed dataset containing ``'feeding'`` and ``'positions'``
-        DataFrames (the standard ``dict`` produced by :func:`~pyMoove.io.load`).
     zones:
         Farm layout zones DataFrame, or the path to a zones CSV written by
         :func:`~pyMoove.io.get_zone_info`.
+    bin_statistics:
+        DataFrame returned by
+        :func:`~pyMoove.calculations.calculate_bin_position_statistics`,
+        with at least columns ``bin``, ``centroid_x``, ``centroid_y``,
+        ``std_x``, ``std_y``, and ``num_inliers``.
     bins:
-        Bins to include.  Accepts a single integer, a list of integers, or a
-        ``range`` object.  If *None*, all unique bins present in
-        ``data['feeding']`` are used.
-    tz:
-        Local timezone of the feeder timestamps (default: ``'Europe/Stockholm'``).
-    outlier_confidence:
-        Confidence level passed to
-        :func:`~pyMoove.calculations.calculate_bin_position_statistics` for
-        robust outlier rejection (default: 0.9999).
+        Optional subset of bin numbers to plot.  Accepts a single integer,
+        a list of integers, or a ``range`` object.  If *None* (default),
+        all bins present in *bin_statistics* are plotted.
     show_ellipse:
         When *True* (default), draw a ±1 SD ellipse around each centroid.
     show:
@@ -693,24 +735,16 @@ def plot_bins(
         The figure and axes, allowing further customization or saving.
     """
     # ------------------------------------------------------------------ #
-    # Determine which bins to plot                                         #
+    # Filter bin_statistics to the requested bins                          #
     # ------------------------------------------------------------------ #
-    if bins is None:
-        bins = sorted(data["feeding"]["bin"].dropna().unique().tolist())
-    elif isinstance(bins, (int, str)):
-        bins = [int(bins)]
+    if bins is not None:
+        if isinstance(bins, (int, str)):
+            bins = [int(bins)]
+        else:
+            bins = [int(b) for b in bins]
+        plot_stats = bin_statistics.loc[bin_statistics["bin"].isin(bins)].copy()
     else:
-        bins = [int(b) for b in bins]
-
-    # ------------------------------------------------------------------ #
-    # Compute statistics for every requested bin                           #
-    # ------------------------------------------------------------------ #
-    bin_stats = calculate_bin_position_statistics(
-        data,
-        bins=bins,
-        tz=tz,
-        outlier_confidence=outlier_confidence,
-    )
+        plot_stats = bin_statistics.copy()
 
     # ------------------------------------------------------------------ #
     # Draw the farm layout                                                 #
@@ -720,11 +754,11 @@ def plot_bins(
     # ------------------------------------------------------------------ #
     # Overlay each bin                                                     #
     # ------------------------------------------------------------------ #
-    # Use a qualitative colour cycle so adjacent bins are visually distinct
-    cmap = plt.get_cmap("tab20" if len(bins) > 10 else "tab10")
+    n_bins = len(plot_stats)
+    cmap = plt.get_cmap("tab20" if n_bins > 10 else "tab10")
     n_colors = cmap.N
 
-    for i, row in bin_stats.iterrows():
+    for i, (_, row) in enumerate(plot_stats.iterrows()):
         bin_id = int(row["bin"])
         cx = row["centroid_x"]
         cy = row["centroid_y"]
@@ -733,6 +767,20 @@ def plot_bins(
             continue  # no position data for this bin
 
         color = cmap(i % n_colors)
+
+        # ±1 SD ellipse
+        if show_ellipse and pd.notna(row["std_x"]) and pd.notna(row["std_y"]):
+            ellipse = Ellipse(
+                xy=(cx, cy),
+                width=2 * row["std_x"],
+                height=2 * row["std_y"],
+                facecolor=color,
+                edgecolor=color,
+                alpha=0.18,
+                linewidth=1.2,
+                zorder=2,
+            )
+            ax.add_patch(ellipse)
 
         # Centroid marker
         ax.scatter(
@@ -767,7 +815,7 @@ def plot_bins(
     ax.set_title("Feeding bin positions")
     handles, labels = ax.get_legend_handles_labels()
     if handles:
-        ncol = 2 if len(bins) > 8 else 1
+        ncol = 2 if n_bins > 8 else 1
         ax.legend(
             handles=handles,
             labels=labels,

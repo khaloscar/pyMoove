@@ -50,7 +50,7 @@ def load_positions_parquet(filePath: str | Path)->pd.DataFrame:
 
     return dataset
 
-def load_bin_stats_parquet(filePath: str | pd.DataFrame)->-pd.DataFrame:
+def load_bin_stats_parquet(filePath: str | pd.DataFrame)->pd.DataFrame:
     """Load pre-computed feed-bin position statistics parquet."""
     return pd.read_parquet(filePath)
 
