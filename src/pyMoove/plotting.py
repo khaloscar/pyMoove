@@ -5,8 +5,7 @@ from collections.abc import Mapping
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.animation import FuncAnimation
-from matplotlib.patches import Patch
-
+from matplotlib.patches import Patch, Ellipse
 
 _ZONE_COLORS = {
     "WalkingAlley": "#eeeeee",
@@ -22,7 +21,9 @@ _ZONE_COLORS = {
 def plot_replacement_example(
     data: Mapping[str, pd.DataFrame],
     zones: pd.DataFrame | None = None,
+    bin_statistics: pd.DataFrame | None = None,
     event_index: int = 0,
+    relative_start_time: int = 60,
     animate: bool = False,
     mark_start: bool = True,
     print_start_positions: bool = False,
@@ -51,6 +52,7 @@ def plot_replacement_example(
     if event_time.tzinfo is None:
         event_time = event_time.tz_localize("Europe/Stockholm")
     event_time = event_time.tz_convert("UTC")
+    event_start = event_time - pd.Timedelta(seconds=relative_start_time) 
     event_end = event_time + pd.Timedelta(seconds=float(event["bout_interval"]))
 
     cow_ids = {
@@ -62,7 +64,7 @@ def plot_replacement_example(
     positions["IDs"] = positions["IDs"].astype(str)
     local_positions = positions.loc[
         positions["IDs"].isin(cow_ids.values())
-        & positions["datetime"].between(event_time, event_end)
+        & positions["datetime"].between(event_start, event_end)
     ]
 
     fig, ax = plt.subplots(figsize=(15, 7), constrained_layout=True)
@@ -113,6 +115,50 @@ def plot_replacement_example(
                     },
                     zorder=1,
                 )
+
+    # Plot the feeding bin position and spatial distribution
+    if bin_statistics is not None:
+        bin_stats = bin_statistics.loc[
+            bin_statistics["bin"] == event["bin"]
+        ]
+
+        if not bin_stats.empty:
+            bin_stats = bin_stats.iloc[0]
+
+            centroid_x = bin_stats["centroid_x"]
+            centroid_y = bin_stats["centroid_y"]
+            std_x = bin_stats["std_x"]
+            std_y = bin_stats["std_y"]
+
+            if pd.notna(centroid_x) and pd.notna(centroid_y):
+                # Plot the bin's spatial standard deviation
+                if pd.notna(std_x) and pd.notna(std_y):
+                    ellipse = Ellipse(
+                        xy=(centroid_x, centroid_y),
+                        width=2 * std_x,
+                        height=2 * std_y,
+                        facecolor="#e31a1c",
+                        edgecolor="#b30000",
+                        alpha=0.20,
+                        linewidth=1.5,
+                        zorder=2,
+                        label=f"Bin {event['bin']} ±1 SD",
+                    )
+                    ax.add_patch(ellipse)
+
+                # Plot the bin centroid
+                ax.scatter(
+                    centroid_x,
+                    centroid_y,
+                    marker="*",
+                    s=250,
+                    color="#e31a1c",
+                    edgecolor="black",
+                    linewidth=0.8,
+                    zorder=6,
+                    label=f"Bin {event['bin']} centroid",
+                )
+
 
     start_positions = {}
     cow_tracks = {}

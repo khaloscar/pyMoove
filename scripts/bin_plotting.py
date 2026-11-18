@@ -4,24 +4,12 @@ from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from scipy.stats import chi2
+from sklearn.covariance import MinCovDet
 import pyMoove.io as mooveIO
-import zone_info
-
-# Ensure scripts directory is in sys.path so zone_info can be imported
-# regardless of current working directory
-SCRIPTS_DIR = Path(__file__).resolve().parent
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-
-# Resolve data directory (works from project root or scripts directory)
-DATA_DIR = (
-    Path("data")
-    if Path("data").exists()
-    else SCRIPTS_DIR.parent / "data"
-)
-
-data = mooveIO.load_processed_dataset(DATA_DIR)
+import scripts.zone_info as zone_info
 
 # positions columns: NIDs, IDs, Time, x, y, Inter, velocity, datetime
 # replacements columns: reactor_cow, bin, time, actor_cow, bout_interval
@@ -184,6 +172,7 @@ def get_bin_feeding_positions(
     data: dict[str, pd.DataFrame],
     bin_id: int,
     tz: str = "Europe/Stockholm",
+    outlier_confidence: float = 0.999,
 ) -> pd.DataFrame:
     """Extract all positional records across all feeding events at a specific bin.
 
@@ -251,10 +240,56 @@ def get_bin_feeding_positions(
     return pd.concat(collected, ignore_index=True)
 
 
+
+def filter_bin_position_outliers(
+    positions: pd.DataFrame,
+    confidence: float = 0.999,
+) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray | None, np.ndarray | None]:
+    """Filter 2D positional outliers using robust MCD covariance and Mahalanobis distance.
+
+    Returns (inliers, outliers, robust_center, robust_covariance). If there are
+    too few valid points or the covariance is degenerate, all valid points are
+    retained rather than risking removal of good observations.
+    """
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between 0 and 1")
+
+    valid = positions.dropna(subset=["x", "y"]).copy()
+    coords = valid[["x", "y"]].to_numpy(dtype=float)
+    finite = np.isfinite(coords).all(axis=1)
+    valid = valid.loc[finite].copy()
+    coords = coords[finite]
+
+    if len(coords) < 5 or np.unique(coords, axis=0).shape[0] < 3:
+        valid["mahalanobis_sq"] = np.nan
+        valid["is_inlier"] = True
+        return valid, valid.iloc[0:0].copy(), None, None
+
+    try:
+        estimator = MinCovDet(random_state=42).fit(coords)
+        distances_sq = estimator.mahalanobis(coords)
+        threshold = float(chi2.ppf(confidence, df=2))
+        is_inlier = distances_sq <= threshold
+
+        valid["mahalanobis_sq"] = distances_sq
+        valid["is_inlier"] = is_inlier
+        return (
+            valid.loc[is_inlier].copy(),
+            valid.loc[~is_inlier].copy(),
+            estimator.location_.copy(),
+            estimator.covariance_.copy(),
+        )
+    except (ValueError, np.linalg.LinAlgError):
+        valid["mahalanobis_sq"] = np.nan
+        valid["is_inlier"] = True
+        return valid, valid.iloc[0:0].copy(), None, None
+
+
 def calculate_bin_position_statistics(
     data: dict[str, pd.DataFrame],
     bins: list[int] | int | range,
     tz: str = "Europe/Stockholm",
+    outlier_confidence: float = 0.9999,
 ) -> pd.DataFrame:
     """Calculate the spatial centroid and standard deviation for each bin during feeding.
 
@@ -305,6 +340,8 @@ def calculate_bin_position_statistics(
                 "num_fixes",
                 "num_visits",
                 "num_cows",
+                "num_inliers",
+                "num_outliers",
             ]
         )
 
@@ -331,6 +368,8 @@ def calculate_bin_position_statistics(
                 "num_fixes": 0,
                 "num_visits": 0,
                 "num_cows": 0,
+                "num_inliers": 0,
+                "num_outliers": 0,
             })
             continue
 
@@ -362,15 +401,20 @@ def calculate_bin_position_statistics(
 
         if b_fixes:
             all_b = pd.concat(b_fixes, ignore_index=True)
+            inliers, outliers, _, _ = filter_bin_position_outliers(
+                all_b, confidence=outlier_confidence
+            )
             results.append({
                 "bin": bin_id,
-                "centroid_x": float(all_b["x"].mean()),
-                "centroid_y": float(all_b["y"].mean()),
-                "std_x": float(all_b["x"].std()),
-                "std_y": float(all_b["y"].std()),
+                "centroid_x": float(inliers["x"].mean()) if not inliers.empty else None,
+                "centroid_y": float(inliers["y"].mean()) if not inliers.empty else None,
+                "std_x": float(inliers["x"].std()) if len(inliers) > 1 else None,
+                "std_y": float(inliers["y"].std()) if len(inliers) > 1 else None,
                 "num_fixes": len(all_b),
                 "num_visits": len(b_events),
                 "num_cows": b_events["cow"].nunique(),
+                "num_inliers": len(inliers),
+                "num_outliers": len(outliers),
             })
         else:
             results.append({
@@ -382,6 +426,8 @@ def calculate_bin_position_statistics(
                 "num_fixes": 0,
                 "num_visits": len(b_events),
                 "num_cows": b_events["cow"].nunique(),
+                "num_inliers": 0,
+                "num_outliers": 0,
             })
 
     return pd.DataFrame(results)
@@ -394,6 +440,8 @@ def plot_bin_feeding_positions(
     color_by_cow: bool = True,
     tz: str = "Europe/Stockholm",
     show: bool = True,
+    outlier_confidence: float = 0.999,
+    show_outliers: bool = True,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Plot all positional fixes during all feeding events for a specific bin.
 
@@ -444,56 +492,67 @@ def plot_bin_feeding_positions(
             bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
         )
     else:
+        inliers, outliers, _, _ = filter_bin_position_outliers(
+            bin_pos, confidence=outlier_confidence
+        )
         print(f"Total position fixes: {len(bin_pos)}")
-        mean_x = bin_pos["x"].mean()
-        mean_y = bin_pos["y"].mean()
-        std_x = bin_pos["x"].std()
-        std_y = bin_pos["y"].std()
-        print(f"Fixes centroid:       x = {mean_x:.2f} m (std {std_x:.2f}), y = {mean_y:.2f} m (std {std_y:.2f})")
+        print(
+            f"Retained fixes:       {len(inliers)} "
+            f"({len(outliers)} flagged as outliers; confidence={outlier_confidence:.1%})"
+        )
 
-        if color_by_cow:
-            cows = bin_pos["cow_id"].unique()
-            # Use colormap to cycle through distinct colors for each cow
-            cmap = plt.get_cmap("tab20" if len(cows) > 10 else "tab10")
-            for i, cow in enumerate(cows):
-                subset = bin_pos.loc[bin_pos["cow_id"] == cow]
-                color = cmap(i % cmap.N)
-                ax.scatter(
-                    subset["x"],
-                    subset["y"],
-                    color=color,
-                    s=18,
-                    alpha=0.6,
-                    zorder=4,
-                    label=f"Cow {cow} ({len(subset)} fixes)",
-                )
-        else:
-            ax.scatter(
-                bin_pos["x"],
-                bin_pos["y"],
-                color="#d9381e",
-                s=18,
-                alpha=0.5,
-                zorder=4,
-                label=f"Position fixes (N={len(bin_pos)})",
+        if not inliers.empty:
+            mean_x = inliers["x"].mean()
+            mean_y = inliers["y"].mean()
+            std_x = inliers["x"].std()
+            std_y = inliers["y"].std()
+            print(
+                f"Filtered centroid:    x = {mean_x:.2f} m (std {std_x:.2f}), "
+                f"y = {mean_y:.2f} m (std {std_y:.2f})"
             )
 
-        # Plot estimated centroid marker of the bin
-        ax.scatter(
-            mean_x,
-            mean_y,
-            marker="*",
-            s=160,
-            color="#ffd700",
-            edgecolor="#222222",
-            linewidth=1.2,
-            zorder=6,
-            label=f"Bin {bin_id} centroid ({mean_x:.1f}, {mean_y:.1f} m)",
-        )
+            if color_by_cow:
+                cows = inliers["cow_id"].unique()
+                cmap = plt.get_cmap("tab20" if len(cows) > 10 else "tab10")
+                for i, cow in enumerate(cows):
+                    subset = inliers.loc[inliers["cow_id"] == cow]
+                    ax.scatter(
+                        subset["x"], subset["y"],
+                        color=cmap(i % cmap.N), s=18, alpha=0.6,
+                        zorder=4, label=f"Cow {cow} ({len(subset)} inliers)",
+                    )
+            else:
+                ax.scatter(
+                    inliers["x"], inliers["y"],
+                    color="#d9381e", s=18, alpha=0.5, zorder=4,
+                    label=f"Inlier fixes (N={len(inliers)})",
+                )
+
+            if show_outliers and not outliers.empty:
+                ax.scatter(
+                    outliers["x"], outliers["y"],
+                    color="#888888", marker="x", s=42, linewidth=1.5,
+                    alpha=0.9, zorder=5,
+                    label=f"Rejected outliers (N={len(outliers)})",
+                )
+
+            # The reported centroid is calculated from retained fixes only.
+            ax.scatter(
+                mean_x, mean_y,
+                marker="*", s=160, color="#ffd700",
+                edgecolor="#222222", linewidth=1.2, zorder=6,
+                label=f"Filtered bin centroid ({mean_x:.1f}, {mean_y:.1f} m)",
+            )
+        else:
+            ax.text(
+                0.5, 0.5, "No valid inlier positions available",
+                transform=ax.transAxes, ha="center", va="center",
+            )
 
     ax.set_title(
         f"All cow positions during feeding at Bin {bin_id} "
-        f"({total_events} visits, {unique_cows} cows, {len(bin_pos):,} fixes)"
+        f"({total_events} visits, {unique_cows} cows, {len(bin_pos):,} fixes; "
+        f"{len(inliers) if not bin_pos.empty else 0:,} retained)"
     )
     # Position legend cleanly (ncol=2 if many cows)
     legend_cols = 2 if color_by_cow and not bin_pos.empty and bin_pos["cow_id"].nunique() > 6 else 1
@@ -506,6 +565,20 @@ def plot_bin_feeding_positions(
 
 
 if __name__ == "__main__":
+    # Ensure scripts directory is in sys.path so zone_info can be imported
+    # regardless of current working directory
+    SCRIPTS_DIR = Path(__file__).resolve().parent
+    if str(SCRIPTS_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS_DIR))
+
+    # Resolve data directory (works from project root or scripts directory)
+    DATA_DIR = (
+        Path("data")
+        if Path("data").exists()
+        else SCRIPTS_DIR.parent / "data"
+    )
+
+    data = mooveIO.load_processed_dataset(DATA_DIR)
     # Load filtered zones for farm layout
     zones_path = DATA_DIR / "zones_filtered.csv"
     if not zones_path.exists():
