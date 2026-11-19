@@ -133,30 +133,39 @@ def cow_to_bin_features(
     event: Mapping[str, Any],
     bin_locations: pd.DataFrame,
 ) -> dict[str, float]:
-    """Summarize each cow's distance to its nearest bin centroid.
+    """Summarize each cow's distance to the centroid of the event's bin.
 
-    ``bin_locations`` is expected to contain ``centroid_x`` and ``centroid_y``
-    columns, as returned by ``calculate_bin_position_statistics``.
+    ``event`` must contain a ``bin`` value. ``bin_locations`` must contain
+    ``bin``, ``centroid_x``, and ``centroid_y`` columns, as returned by
+    ``calculate_bin_position_statistics``.
     """
-    required_columns = {"centroid_x", "centroid_y"}
+    required_columns = {"bin", "centroid_x", "centroid_y"}
     missing_columns = required_columns.difference(bin_locations.columns)
     if missing_columns:
         raise ValueError(
             f"bin_locations is missing columns: {sorted(missing_columns)}"
         )
+    if "bin" not in event:
+        raise ValueError("event is missing the 'bin' value")
 
-    bins = bin_locations[["centroid_x", "centroid_y"]].to_numpy(dtype=float)
-    bins = bins[np.isfinite(bins).all(axis=1)]
-    if not len(bins):
-        raise ValueError("bin_locations contains no valid bin centroids")
+    event_bin = event["bin"]
+    matching_bin = bin_locations.loc[
+        bin_locations["bin"].eq(event_bin),
+        ["centroid_x", "centroid_y"],
+    ]
+    if matching_bin.empty:
+        raise ValueError(f"bin_locations contains no centroid for bin {event_bin!r}")
+    if len(matching_bin) > 1:
+        raise ValueError(f"bin_locations contains multiple centroids for bin {event_bin!r}")
+
+    centroid = matching_bin.iloc[0].to_numpy(dtype=float)
+    if not np.isfinite(centroid).all():
+        raise ValueError(f"bin {event_bin!r} has no finite centroid coordinates")
 
     positions = _event_positions(event)
     features: dict[str, float] = {}
     for cow_index, cow_name in enumerate(("cow_1", "cow_2")):
-        distances = np.linalg.norm(
-            positions[cow_index, :, np.newaxis, :] - bins[np.newaxis, :, :],
-            axis=2,
-        ).min(axis=1)
+        distances = np.linalg.norm(positions[cow_index] - centroid, axis=1)
         features.update(
             summarize_distance_series(distances, f"{cow_name}_to_bin_distance")
         )
