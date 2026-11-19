@@ -212,7 +212,7 @@ def load_raw_dataset(dataFolderPath: str | Path) -> dict[str, pd.DataFrame]:
         "positions": load_raw_positions_folder(dataFolderPath / "RTLS 20251010"),
         "mapping": load_raw_delpro_tag_mapping(dataFolderPath / "Delpro taggar 20251010.xlsx"),
         "feeding": load_raw_feeding_bin_visits(dataFolderPath / "Utfodring 20251010.xlsx"),
-        "zones": load_raw_zone_info(dataFolderPath / "zone_info.csv"),
+        "zones": load_zone_info(dataFolderPath / "zone_info.csv"),
     }
 
     return datasetDict

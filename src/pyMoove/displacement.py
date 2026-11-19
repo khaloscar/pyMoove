@@ -18,6 +18,7 @@ import pandas as pd
 # Feeding bin distance
 # Interaction time criterion
 
+@DeprecationWarning
 def detect_replacements_by_bin_replacement(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bin: int, max_bin_distance: float=1.0, replacement_criterion:int=26) -> pd.DataFrame:
     """Detect feeding-bin displacement (replacement) events from raw position data.
 
@@ -117,7 +118,7 @@ def detect_replacements_by_bin_replacement(positions: pd.DataFrame, bin_statisti
 
     return result
 
-def detect_replacements_by_bin_hug(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bin: int, max_bin_distance: float=1.0) -> pd.DataFrame:
+def detect_replacements_by_bin_hug(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bin: int, max_bin_distance: float=1.0, bout_interval: int=20) -> pd.DataFrame:
     """Detect feeding-bin displacement (replacement) events from raw position data.
 
     For a given feeding bin, scans all position fixes near the bin and identifies
@@ -209,11 +210,11 @@ def detect_replacements_by_bin_hug(positions: pd.DataFrame, bin_statistics: pd.D
                     'bin': bin,
                     'time': datetime,
                     'actor_cow': cow_v,
-                    'bout_interval': 0.0,
+                    'bout_interval': bout_interval,
                 })
 
                 # Apply 60-second cooldown only to this cow pair
-                cooldown_until[cow_pair] = time + 60.0
+                cooldown_until[cow_pair] = time + bout_interval + 30
 
     if not events:
         return pd.DataFrame(columns=['reactor_cow', 'bin', 'time', 'actor_cow', 'bout_interval'])

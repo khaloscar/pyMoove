@@ -6,7 +6,6 @@ from sklearn.covariance import MinCovDet
 def calculate_bin_position_statistics(
     data: dict[str, pd.DataFrame],
     bins: list[int] | int | range,
-    tz: str = "Europe/Stockholm",
     outlier_confidence: float = 0.9999,
 ) -> pd.DataFrame:
     """Calculate the spatial centroid and standard deviation for each bin during feeding.
@@ -100,8 +99,6 @@ def calculate_bin_position_statistics(
 
             start_str = str(event["start_time"])
             start_dt = pd.Timestamp(f"{date_str} {start_str}")
-            if start_dt.tzinfo is None:
-                start_dt = start_dt.tz_localize(tz)
             start_dt_utc = start_dt.tz_convert("UTC")
 
             if "duration" in event and pd.notna(event["duration"]):
@@ -109,8 +106,6 @@ def calculate_bin_position_statistics(
             else:
                 end_str = str(event["end_time"])
                 end_dt = pd.Timestamp(f"{date_str} {end_str}")
-                if end_dt.tzinfo is None:
-                    end_dt = end_dt.tz_localize(tz)
                 end_dt_utc = end_dt.tz_convert("UTC")
 
             pts = cow_pos.loc[cow_pos["datetime"].between(start_dt_utc, end_dt_utc)]
@@ -192,6 +187,7 @@ def get_bin_feeding_positions(
         start_str = str(event["start_time"])
         start_dt = pd.Timestamp(f"{date_str} {start_str}")
         if start_dt.tzinfo is None:
+            print('Time zone assumed to be tz!!!!!______!!!!!!!!')
             start_dt = start_dt.tz_localize(tz)
         start_dt_utc = start_dt.tz_convert("UTC")
 
@@ -201,6 +197,7 @@ def get_bin_feeding_positions(
             end_str = str(event["end_time"])
             end_dt = pd.Timestamp(f"{date_str} {end_str}")
             if end_dt.tzinfo is None:
+                print('Time zone assumed to be tz!!!!!______!!!!!!!!')
                 end_dt = end_dt.tz_localize(tz)
             end_dt_utc = end_dt.tz_convert("UTC")
 
