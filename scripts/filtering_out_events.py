@@ -2,7 +2,6 @@
 from pathlib import Path
 from pyMoove import io as mooveIO
 from pyMoove import statistics as mooveStats
-from pyMoove import cleaning as mooveClean
 import pandas as pd
 
 data_dir = Path("data")

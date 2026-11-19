@@ -195,10 +195,10 @@ def load_raw_feeding_bin_visits(filePath: str | Path)->pd.DataFrame:
     return pd.read_excel(filePath, sheet_name="Per visit")
 
 
-def load_raw_zone_info(filePath: str | Path)->pd.DataFrame:
+def load_zone_info(filePath: str | Path, sep=";")->pd.DataFrame:
     """Loads zone_info.csv file
     column separator used here ';', initially"""
-    return pd.read_csv(filePath, sep=";")
+    return pd.read_csv(filePath, sep=sep)
 
 
 def load_raw_dataset(dataFolderPath: str | Path) -> dict[str, pd.DataFrame]:
