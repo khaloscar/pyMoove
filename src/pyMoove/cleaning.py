@@ -17,6 +17,10 @@ def filter_replacement_events(replacements: pd.DataFrame, stats: pd.DataFrame)->
         The same replacements df with invalid events filtered out.
     """
     #NOTE: This function requires the statistics derived earlier
+    #NOTE: Maybe one should only cosnider the replacements and the positions,
+    #TODO: Maybe it is better to keep events in which all positions have matching timestamps for both cows,
+    #TODO: I.e. it is not enough to onyl consider events where atleast one of the position timestamps are synchronized.
+    #NOTE: Related function: summarize_event_coverage()
 
     if len(replacements) != len(stats):
         raise ValueError(
