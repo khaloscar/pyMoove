@@ -126,6 +126,7 @@ def inspect_replacement_event_statistics(
         time_before: float = 0.0,
         time_after: float = 0.0,
 )->pd.DataFrame:
+    #TODO: Maybe think of a better name for this function?
 
     event_statistics = []
 
@@ -228,6 +229,9 @@ def summarize_event_coverage(stats: pd.DataFrame)->None:
     Events are defined as invalid when no synchronized positional data
     are available for both the reactor and the actor cow. Meaning, at least one pair of data is synchronized.
     """
+    #TODO: Maybe it is better to keep events in which all positions have matching timestamps for both cows,
+    #TODO: I.e. it is not enough to onyl consider events where atleast one of the position timestamps are synchronized.
+    #NOTE: Related function: filter_replacement_events()
 
     total_events = stats.shape[0]
     matching = stats["n_matches"] > 0

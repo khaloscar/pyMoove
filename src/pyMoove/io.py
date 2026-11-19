@@ -196,8 +196,16 @@ def load_raw_feeding_bin_visits(filePath: str | Path)->pd.DataFrame:
 
 
 def load_zone_info(filePath: str | Path, sep=";")->pd.DataFrame:
-    """Loads zone_info.csv file
-    column separator used here ';', initially"""
+    """
+    Loads zone_info.csv file
+
+    parameters
+    --------------
+    filePath: str | Path
+        Path to .csv file with zone information
+    sep: str
+        Separator used in the .csv
+    """
     return pd.read_csv(filePath, sep=sep)
 
 
