@@ -117,11 +117,13 @@ def plot_zones(
     return fig, ax
 
 def plot_replacement_example(
-    data: Mapping[str, pd.DataFrame],
+    positions: pd.DataFrame,
+    replacements: pd.DataFrame,
     zones: pd.DataFrame | None = None,
     bin_statistics: pd.DataFrame | None = None,
     event_index: int = 0,
     relative_start_time: int = 60,
+    relative_end_time: int = 0,
     animate: bool = False,
     mark_start: bool = True,
     print_start_positions: bool = False,
@@ -142,8 +144,6 @@ def plot_replacement_example(
     ``print_start_positions=True`` prints those first-fix coordinates in
     farm-local metres.
     """
-    positions = data["positions"].copy()
-    replacements = data["replacements"]
     event = replacements.iloc[event_index]
 
     event_time = pd.Timestamp(event["time"])
@@ -151,7 +151,7 @@ def plot_replacement_example(
         event_time = event_time.tz_localize("Europe/Stockholm")
     event_time = event_time.tz_convert("UTC")
     event_start = event_time - pd.Timedelta(seconds=relative_start_time) 
-    event_end = event_time + pd.Timedelta(seconds=float(event["bout_interval"]))
+    event_end = event_time + pd.Timedelta(seconds=float(event["bout_interval"])) + pd.Timedelta(seconds=relative_end_time)
 
     cow_ids = {
         "reactor": str(event["reactor_cow"]),
