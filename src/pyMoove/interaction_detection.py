@@ -111,6 +111,7 @@ def detect_bin_interactions_by_bin(positions: pd.DataFrame,
                     continue
 
                 bin_interactions.append({
+                    'repl_id': '',
                     'reactor_cow': cow_u,
                     'bin': bin,
                     'time': datetime,
@@ -122,9 +123,10 @@ def detect_bin_interactions_by_bin(positions: pd.DataFrame,
                 cooldown_until[cow_pair] = time + cooldown
 
     if not bin_interactions:
-        return pd.DataFrame(columns=['reactor_cow', 'bin', 'time', 'actor_cow', 'bout_interval'])
+        return pd.DataFrame(columns=['repl_id', 'reactor_cow', 'bin', 'time', 'actor_cow', 'bout_interval'])
 
     result = pd.DataFrame(bin_interactions)
+    result['repl_id'] = result['repl_id'].astype('string')
     result['bin'] = result['bin'].astype('int32')
     result['bout_interval'] = result['bout_interval'].astype('float64')
     result['time'] = pd.to_datetime(result['time'], utc=True).astype('datetime64[us, UTC]')
@@ -133,7 +135,7 @@ def detect_bin_interactions_by_bin(positions: pd.DataFrame,
 
     return result
 
-def detect_bin_interactions(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bins: list[int] | range, max_bin_distance: float=1.0, bout_interval: int=20) -> pd.DataFrame:
+def detect_bin_interactions(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bins: list[int] | range, max_bin_distance: float=1.0, bout_interval: int=20, cooldown: int = 30) -> pd.DataFrame:
     """Detect feeding-bin displacement (replacement) events from raw position data.
 
     For a given feeding bin, scans all position fixes near the bin and identifies
@@ -173,7 +175,7 @@ def detect_bin_interactions(positions: pd.DataFrame, bin_statistics: pd.DataFram
 
     bin_interactions = []
     for bin in bins:
-        bin_interactions.append(detect_bin_interactions_by_bin(positions, bin_statistics, bin, max_bin_distance, bout_interval))    
+        bin_interactions.append(detect_bin_interactions_by_bin(positions, bin_statistics, bin, max_bin_distance, bout_interval, cooldown))    
 
     output = pd.concat(bin_interactions)
     return output
@@ -204,6 +206,8 @@ def validate_bin_interactions(
     if bin_interactions.empty:
         print("Bin_interactions dataframe is empty")
         return
+
+    #validated_bin_interactions = bin_interactions.copy()
 
     interaction_by_bin = {
         bin_value: group
@@ -247,6 +251,9 @@ def validate_bin_interactions(
         validated_events = matching_events[
             time_difference <= acceptance_interval
         ]
+
+        for i in validated_events.index:
+            bin_interactions.loc[i, 'repl_id'] = replacement['repl_id']
 
         if not validated_events.empty:
             validated_indices.extend(validated_events.index)
