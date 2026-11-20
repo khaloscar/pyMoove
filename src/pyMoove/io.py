@@ -8,6 +8,7 @@ import json
 import pandas as pd
 from pathlib import Path
 from typing import TypedDict
+import pyMoove.preprocessing as moovePreprocess
 
 """Full dataset type, for LSP support"""
 class datasetFull(TypedDict):
@@ -64,6 +65,10 @@ def load_replacements_parquet(filePath: str | Path)->pd.DataFrame:
 
     # Consistent time-format to utc
     dataset["time"] = dataset["time"].dt.tz_convert("UTC")
+
+    # Assign ID's to replacement events:
+    if "repl_id" not in dataset.columns:
+        moovePreprocess.assign_replacement_id(dataset)
 
     return dataset
 
