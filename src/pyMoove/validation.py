@@ -6,6 +6,7 @@ import pandas as pd
 #TODO: Look into this
 #NOTE: Can be added here for convenience.. ?
 
+
 def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->None:
     """
     Verify that a given DataFrame contains at least the expected columns.
@@ -36,6 +37,7 @@ def check_replacement_dataframe_structure(df: pd.DataFrame)->None:
     """Verify that a DataFrame has the expected replacement event structure"""
 
     expected_columns = [
+        "repl_id",
         "reactor_cow", 
         "bin",
         "time",
