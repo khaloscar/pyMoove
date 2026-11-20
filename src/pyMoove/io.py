@@ -9,6 +9,7 @@ import pandas as pd
 from pathlib import Path
 from typing import TypedDict
 import pyMoove.preprocessing as moovePreprocess
+import pyMoove.validation as mooveValidate
 
 """Full dataset type, for LSP support"""
 class datasetFull(TypedDict):
@@ -68,7 +69,9 @@ def load_replacements_parquet(filePath: str | Path)->pd.DataFrame:
 
     # Assign ID's to replacement events:
     if "repl_id" not in dataset.columns:
-        moovePreprocess.assign_replacement_id(dataset)
+        dataset = moovePreprocess.assign_replacement_id(dataset)
+
+    mooveValidate.check_replacement_ids(dataset)
 
     return dataset
 
@@ -134,6 +137,8 @@ def load_processed_dataset(dataFolderPath: str | Path)->datasetFull:
         ),
     }
 
+    #TODO: Displaying memory is a useful metric, can all loading functions have this,
+    # can we generalize it and make the functionality public or something?
     print(f"\nLoaded dataset in folder: {folder}")
     tot_mb = 0;
     for name, df in dataset.items():
@@ -200,7 +205,7 @@ def load_raw_feeding_bin_visits(filePath: str | Path)->pd.DataFrame:
     return pd.read_excel(filePath, sheet_name="Per visit")
 
 
-def load_zone_info(filePath: str | Path, sep=";")->pd.DataFrame:
+def load_zone_info(filePath: str | Path, sep: str =";")->pd.DataFrame:
     """
     Loads zone_info.csv file
 

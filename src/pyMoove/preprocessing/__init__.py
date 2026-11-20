@@ -1,5 +1,6 @@
 # preprocessing/__init__.py
-from .events import build_gos_event_table, assign_replacement_id, assign_gos_id 
+from .events import build_gos_event_table
+from .identifiers import assign_replacement_id, assign_gos_id
 
 __all__ = [
     "build_gos_event_table",

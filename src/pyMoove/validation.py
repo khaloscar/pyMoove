@@ -4,6 +4,7 @@ import pandas as pd
 #NOTE: Currently, columns may be defined at different places, 
 #NOTE: perhaps one central definition should be used and modified?
 #TODO: Look into this
+#NOTE: Can be added here for convenience.. ?
 
 def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->None:
     """
@@ -19,7 +20,7 @@ def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->No
     Raises
     -------
         ValueError: The df does not contain all of the expected columns
-        Nothing: The df contains all of the expected columns
+        Nothing: The df contains at least all of the expected columns
     """
 
     missing_columns = set(expected_columns) - set(df.columns)
@@ -132,3 +133,18 @@ def check_replacement_statistics_dataframe_structure(df: pd.DataFrame) -> None:
     ]
 
     _check_columns(df, expected_columns, "Replacement statistics")
+
+
+def check_replacement_ids(replacements: pd.DataFrame)->None:
+    """Verify that replacement ID's exists, that they are not null and that they are unique"""
+
+    column = "repl_id"
+
+    if column not in replacements.columns:
+        raise ValueError(f"The {column} column is missing in dataset")
+
+    if replacements[column].isna().any():
+        raise ValueError("There are missing replacement ID's in dataset")
+
+    if not replacements[column].is_unique:
+        raise ValueError("There are non unique replacement ID's in dataset")
