@@ -1,6 +1,12 @@
 """Checks for the various dataframes used, can be used to ensure that the passed dataframes has the expected structure."""
 import pandas as pd
 
+#NOTE: Currently, columns may be defined at different places, 
+#NOTE: perhaps one central definition should be used and modified?
+#TODO: Look into this
+#NOTE: Can be added here for convenience.. ?
+
+
 def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->None:
     """
     Verify that a given DataFrame contains at least the expected columns.
@@ -15,7 +21,7 @@ def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->No
     Raises
     -------
         ValueError: The df does not contain all of the expected columns
-        Nothing: The df contains all of the expected columns
+        Nothing: The df contains at least all of the expected columns
     """
 
     missing_columns = set(expected_columns) - set(df.columns)
@@ -31,6 +37,7 @@ def check_replacement_dataframe_structure(df: pd.DataFrame)->None:
     """Verify that a DataFrame has the expected replacement event structure"""
 
     expected_columns = [
+        "repl_id",
         "reactor_cow", 
         "bin",
         "time",
@@ -40,6 +47,20 @@ def check_replacement_dataframe_structure(df: pd.DataFrame)->None:
 
     _check_columns(df, expected_columns, "Replacements")
 
+
+def check_gos_event_dataframe_structure(df: pd.DataFrame)->None:
+    """Verify that a DataFrame has the expected replacement event structure"""
+
+    expected_columns = [
+        "cow_1_id",
+        "cow_2_id",
+        "bin",
+        "timestamps",
+        "positions",
+        "velocities",
+    ]
+
+    _check_columns(df, expected_columns, "Gos-events")
 
 
 def check_positions_dataframe_structure(df: pd.DataFrame)->None:
@@ -114,3 +135,18 @@ def check_replacement_statistics_dataframe_structure(df: pd.DataFrame) -> None:
     ]
 
     _check_columns(df, expected_columns, "Replacement statistics")
+
+
+def check_replacement_ids(replacements: pd.DataFrame)->None:
+    """Verify that replacement ID's exists, that they are not null and that they are unique"""
+
+    column = "repl_id"
+
+    if column not in replacements.columns:
+        raise ValueError(f"The {column} column is missing in dataset")
+
+    if replacements[column].isna().any():
+        raise ValueError("There are missing replacement ID's in dataset")
+
+    if not replacements[column].is_unique:
+        raise ValueError("There are non unique replacement ID's in dataset")

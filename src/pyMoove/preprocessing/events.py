@@ -1,12 +1,14 @@
 """Build gos event records from replacement and position data."""
 
-from pathlib import Path
 import numpy as np
 import pandas as pd
-from pyMoove.io import load_positions_parquet, load_replacements_parquet
 import pyMoove.validation as mooveValidate
 
 
+#TODO: GOS event ID generation function should be included for consistency, 
+#TODO: Replacements dataframe is guaranteed to contain 'repl_id' column, 
+# therefore gos-events which is also replacements can be easily flagged or kept track of
+# or someting?
 _GOS_EVENT_COLUMNS = [
     "cow_1_id",
     "cow_2_id",
@@ -16,57 +18,49 @@ _GOS_EVENT_COLUMNS = [
     "velocities",
 ]
 
+#######################################################
+# Creation of gos-events
+#######################################################
 
+
+#NOTE: This function for creating gos-events can be improved.
 def build_gos_event_table(
-    replacements: pd.DataFrame | str | Path,
-    positions: pd.DataFrame | str | Path,
-    *,
-    save_to_parquet: bool = False,
-    output_path: str | Path | None = None,
+    replacements: pd.DataFrame,
+    positions: pd.DataFrame,
     print_skipped: bool = False,
 ) -> pd.DataFrame:
+    """Construct GOS event records from replacement and position DataFrames.
 
-    """Create one GOS-style event record per replacement.
+    For each replacement event, extract the actor's and reactor's
+    position trajectories over the interval [time, time + bout_interval].
 
-    The actor is stored as cow 1 and the reactor as cow 2. Positions are
-    restricted to the inclusive interval from ``time`` through
-    ``time + bout_interval``. Only timestamps present for both cows are kept,
-    so each cow's positions and velocities align with ``timestamps``. Events
-    without synchronized positions are skipped. Set ``print_skipped=True`` to
-    print a summary of skipped events.
-    Either input may be a DataFrame or a path to its processed Parquet file.
+    Only observations with matching timestamps for both cows are retained.
+    Events without synchronized observations are skipped.
 
-    If ``save_to_parquet`` is true, ``output_path`` specifies where to save
-    the resulting table. The table is returned whether or not it is saved.
+    The actor is stored as cow 1 and the reactor as cow 2.
 
     Parameters
     ----------
-    print_skipped:
-        Whether to print a summary when replacement events are skipped.
+    replacements : pd.DataFrame
+        Replacement events containing cow IDs, event times, feeding-bin IDs,
+        and bout intervals.
+    positions : pd.DataFrame
+        Position observations with cow IDs, timestamps, coordinates,
+        and velocities.
+    print_skipped : bool, default False
+        Print a summary of events skipped due to missing synchronized data.
 
-    Raises
-    ------
-    ValueError
-        If the input columns are missing, position timestamps are duplicated
-        for a cow, or ``save_to_parquet`` and ``output_path`` are inconsistent.
+    Returns
+    -------
+    pd.DataFrame
+        One row per successfully constructed GOS event.
     """
-
-    #checking if outputpath is set if one wants to save
-    if save_to_parquet and output_path is None:
-        raise ValueError("output_path is required when save_to_parquet=True")
-    if not save_to_parquet and output_path is not None:
-        raise ValueError("set save_to_parquet=True to write output_path")
-
-    #if replacements/positions is not set to dataframe we load it from parquet
-    if not isinstance(replacements, pd.DataFrame):
-        replacements = load_replacements_parquet(replacements)
-    if not isinstance(positions, pd.DataFrame):
-        positions = load_positions_parquet(positions)
 
     #validate replacements and positions 
     mooveValidate.check_replacement_dataframe_structure(replacements)
     mooveValidate.check_positions_dataframe_structure(positions)
 
+    #NOTE: How does this differ from the above, and why is this needed?
     #grab the data and make sure it is in right format
     position_data = positions[["IDs", "datetime", "x", "y", "velocity"]].copy()
     position_data["IDs"] = position_data["IDs"].astype("string")
@@ -76,18 +70,24 @@ def build_gos_event_table(
             position_data[column], errors="raise"
         )
 
+    #NOTE: Why is this useful ?
     #checking no duplicates
     if position_data.duplicated(["IDs", "datetime"]).any():
         raise ValueError("positions must have at most one row per cow and timestamp")
 
+    #NOTE: Useful why?
     #checking that all positions are finite
     position_data = position_data.loc[
         np.isfinite(position_data[["x", "y"]]).all(axis=1)
     ]
+
+    #NOTE: Purpose here?
     cow_tracks = {
         str(cow_id): group.set_index("datetime")[["x", "y", "velocity"]].sort_index()
         for cow_id, group in position_data.groupby("IDs", sort=False)
     }
+
+    #NOTE: Why the utc thing what happens here?
     empty_track = pd.DataFrame(
         columns=["x", "y", "velocity"],
         index=pd.DatetimeIndex([], tz="UTC", name="datetime"),
@@ -126,6 +126,8 @@ def build_gos_event_table(
                 unsynchronized_count += 1
             continue
 
+        #NOTE: Why 'timestamps' and not 'time'? What is the difference really ? Is this not or is it
+        # consistent w/ how 'time'-column is defined inside replacements dataframe?
         records.append(
             {
                 "cow_1_id": actor_id,
@@ -157,6 +159,4 @@ def build_gos_event_table(
         )
 
     event_table = pd.DataFrame.from_records(records, columns=_GOS_EVENT_COLUMNS)
-    if output_path is not None:
-        event_table.to_parquet(output_path, index=False)
     return event_table

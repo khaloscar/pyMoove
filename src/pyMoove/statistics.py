@@ -1,8 +1,10 @@
 """Get some useful information about different datasets."""
 import pandas as pd
 import numpy as np
+import pyMoove.validation as mooveValidate
 
-#TODO: 
+import warnings
+
 
 def inspect_dataframe(df: pd.DataFrame, name: str = "Dataset")->None:
 
@@ -34,7 +36,7 @@ def inspect_dataframe(df: pd.DataFrame, name: str = "Dataset")->None:
     print(f"\n{'='*60}\n")
 
 
-def inspect_positions(df: pd.Dataframe, name: str = "Positions data")->None:
+def inspect_positions(df: pd.DataFrame, name: str = "Positions data")->None:
     """
     Columns for the final positions frame, after AniSpace interpolation and cleaning
     Missing values:
@@ -119,6 +121,110 @@ def inspect_cow_statistict(ID: str, positions: pd.DataFrame, replacements: pd.Da
         print(f"Maximum velocity: {cow_positions['velocity'].max():.3f} m/s")
 
 
+def compute_replacement_event_statistics(
+        positions: pd.DataFrame,
+        replacements: pd.DataFrame,
+        bin_stats: pd.DataFrame,
+        time_before: float = 0.0,
+        time_after: float = 0.0,
+)->pd.DataFrame:
+
+    mooveValidate.check_replacement_dataframe_structure(replacements)
+    mooveValidate.check_replacement_ids(replacements)
+    mooveValidate.check_positions_dataframe_structure(positions)
+    mooveValidate.check_bin_stats_dataframe_structure(bin_stats)
+
+    event_statistics = []
+
+    # Associate each replacement with its feeding-bin position
+    repl = replacements.merge(
+        bin_stats[["bin", "centroid_x", "centroid_y"]],
+        on="bin",
+        how="left",
+        validate="many_to_one",
+    )
+
+    # Group positions by cow once for faster access
+    cow_positions = {
+        str(ID): group.set_index("datetime")[["x", "y"]].sort_index()
+        for ID, group in positions.groupby("IDs")
+    }
+
+    empty = pd.DataFrame(
+        columns=["x", "y"],
+        index=pd.DatetimeIndex([], tz="UTC", name="datetime"),
+    )
+
+    for _, event in repl.iterrows():
+
+        actor_id = str(event["actor_cow"])
+        reactor_id = str(event["reactor_cow"])
+
+        t = event["time"]
+        dt = pd.Timedelta(seconds=event["bout_interval"])
+
+        # Look at a replacement event, 
+        # Can look at a some time before the event and after the event
+        start = t - pd.Timedelta(seconds=time_before)
+        end = t + dt + pd.Timedelta(seconds=time_after)
+
+        # Extract both trajectories
+        actor_pos = cow_positions.get(actor_id, empty).loc[start:end].dropna()
+        reactor_pos = cow_positions.get(reactor_id, empty).loc[start:end].dropna()
+
+        # Match positions at identical timestamps
+        matched = actor_pos.join(
+            reactor_pos,
+            how="inner",
+            lsuffix="_actor",
+            rsuffix="_reactor",
+        )
+
+        # Cow-to-cow distances
+        d_cows = np.hypot(
+            matched["x_actor"] - matched["x_reactor"],
+            matched["y_actor"] - matched["y_reactor"],
+        )
+
+        # Cow-to-bin distances
+        bx, by = event["centroid_x"], event["centroid_y"]
+
+        d_actor_bin = pd.Series(dtype=float)
+        d_reactor_bin = pd.Series(dtype=float)
+
+        if pd.notna(bx) and pd.notna(by):
+            d_actor_bin = np.hypot(actor_pos["x"] - bx, actor_pos["y"] - by)
+            d_reactor_bin = np.hypot(reactor_pos["x"] - bx, reactor_pos["y"] - by)
+
+        # Store statistics for this event
+        event_statistics.append({
+            "repl_id": event["repl_id"],
+            "actor_cow": actor_id,
+            "reactor_cow": reactor_id,
+            "bin": event["bin"],
+            "time": t,
+            "bout_interval": event["bout_interval"],
+
+            "n_actor": len(actor_pos),
+            "n_reactor": len(reactor_pos),
+            "n_matches": len(matched),
+
+            "cow_min_m": d_cows.min(),
+            "cow_mean_m": d_cows.mean(),
+            "cow_max_m": d_cows.max(),
+
+            "actor_bin_min_m": d_actor_bin.min(),
+            "actor_bin_mean_m": d_actor_bin.mean(),
+            "actor_bin_max_m": d_actor_bin.max(),
+
+            "reactor_bin_min_m": d_reactor_bin.min(),
+            "reactor_bin_mean_m": d_reactor_bin.mean(),
+            "reactor_bin_max_m": d_reactor_bin.max(),
+        })
+
+    return pd.DataFrame(event_statistics)
+
+
 def inspect_replacement_event_statistics(
         positions: pd.DataFrame,
         replacements: pd.DataFrame,
@@ -126,7 +232,16 @@ def inspect_replacement_event_statistics(
         time_before: float = 0.0,
         time_after: float = 0.0,
 )->pd.DataFrame:
-    #TODO: Maybe think of a better name for this function?
+
+    warnings.warn(
+        "inspect_replacement_event_statistics() is deprecated and will be removed."
+        "Use compute_replacement_event_statistics() instead. "
+        "Note: The new function preserves/assumes column 'repl_id' instead of 'event_id', consider this change. "
+        "Use io.load_replacements_parquet() which will automatically assign 'repl_id' column. "
+        "IMPORTANT: if creating replacements in some other than from moo4feed, consider what 'repl_id' means and how it "
+        "might affect relationship between moo4feed repl. and any other repl. definiton. ",
+        FutureWarning, stacklevel=2
+    )
 
     event_statistics = []
 
