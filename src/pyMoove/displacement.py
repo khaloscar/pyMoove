@@ -18,7 +18,7 @@ import pandas as pd
 # Feeding bin distance
 # Interaction time criterion
 
-@DeprecationWarning
+'''@DeprecationWarning
 def detect_replacements_by_bin_replacement(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bin: int, max_bin_distance: float=1.0, replacement_criterion:int=26) -> pd.DataFrame:
     """Detect feeding-bin displacement (replacement) events from raw position data.
 
@@ -116,9 +116,9 @@ def detect_replacements_by_bin_replacement(positions: pd.DataFrame, bin_statisti
     result['reactor_cow'] = result['reactor_cow'].astype('string')
     result['actor_cow'] = result['actor_cow'].astype('string')
 
-    return result
+    return result'''
 
-def detect_replacements_by_bin_hug(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bin: int, max_bin_distance: float=1.0, bout_interval: int=20) -> pd.DataFrame:
+def detect_replacements_by_bin(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bin: int, max_bin_distance: float=1.0, bout_interval: int=20) -> pd.DataFrame:
     """Detect feeding-bin displacement (replacement) events from raw position data.
 
     For a given feeding bin, scans all position fixes near the bin and identifies
@@ -228,9 +228,51 @@ def detect_replacements_by_bin_hug(positions: pd.DataFrame, bin_statistics: pd.D
 
     return result
 
-def detect():
+def detect_replacements(positions: pd.DataFrame, bin_statistics: pd.DataFrame, bins: list[int] | range, max_bin_distance: float=1.0, bout_interval: int=20) -> pd.DataFrame:
+    """Detect feeding-bin displacement (replacement) events from raw position data.
 
-    pass
+    For a given feeding bin, scans all position fixes near the bin and identifies
+    moments where one cow is immediately followed by a different cow — a proxy
+    for a social displacement / replacement event.
+
+    Parameters
+    ----------
+    data:
+        Processed dataset; must contain a ``'positions'`` DataFrame with columns
+        ``IDs``, ``Time``, ``x``, ``y``, and ``datetime``.
+    bin_statistics:
+        DataFrame produced by ``calculate_bin_position_statistics`` that contains
+        at least ``bin``, ``centroid_x``, and ``centroid_y`` columns.
+    bin:
+        The bin number to analyse.
+    max_bin_distance:
+        Maximum Euclidean distance (metres) from the bin centroid for a position
+        fix to be considered "at the bin".  Default is 1.0 m.
+    replacement_criterion:
+        Maximum number of seconds allowed between two consecutive fixes by
+        *different* cows for the transition to count as a replacement event.
+        Default is 26 s.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per detected replacement event with columns matching
+        ``data['replacements']``:
+
+        - ``reactor_cow``  – cow that was present first (displaced)
+        - ``bin``          – bin number (int32)
+        - ``time``         – datetime of the first fix (datetime64[us, UTC])
+        - ``actor_cow``    – cow that arrived next (displacer)
+        - ``bout_interval``– elapsed seconds between the two fixes (float64)
+    """
+
+    results = []
+    for bin in bins:
+        results.append(detect_replacements_by_bin(positions, bin_statistics, bin, max_bin_distance, bout_interval))    
+
+    output = pd.concat(results)
+    return output
+    
 
 def check_replacement_recall(
     replacements: pd.DataFrame,
