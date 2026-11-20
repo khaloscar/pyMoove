@@ -42,7 +42,7 @@ for column in columns:
     outliers.append(mooveStats.find_boxplot_outliers(repl_event_stats, column))
 
 # All unique event outliers are collected into one dataframe.
-unique_outliers = pd.concat(outliers).drop_duplicates(subset="event_id")
+unique_outliers = pd.concat(outliers).drop_duplicates(subset="repl_id")
 
 
 # We can inspect the outliers however we like

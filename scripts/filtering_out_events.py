@@ -43,9 +43,9 @@ print(range_bins.head())
 print()
 
 # Selection of individual event
-eventMask = stats["event_id"] == 1
+eventMask = stats["repl_id"] == "REPL-20251010-00079"
 eventOne = stats[eventMask]
-print("\nSelection of event_id 1")
+print("\nSelection of repl_id REPL-20251010-00079")
 print(eventOne.head())
 print()
 
