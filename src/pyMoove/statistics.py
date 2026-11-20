@@ -2,8 +2,9 @@
 import pandas as pd
 import numpy as np
 import pyMoove.validation as mooveValidate
-
+from pathlib import Path
 import warnings
+import matplotlib.pyplot as plt
 
 
 def inspect_dataframe(df: pd.DataFrame, name: str = "Dataset")->None:
@@ -401,3 +402,37 @@ def find_boxplot_outliers(stats: pd.DataFrame, column: str)->pd.DataFrame:
     outliers = stats.loc[outlierMask]
 
     return outliers
+
+
+def statistics_box_plots(stats: pd.DataFrame, folder_path: Path):
+    # Cow to cow distances
+    fig, ax = plt.subplots()
+    stats[["cow_min_m", "cow_mean_m", "cow_max_m"]].plot.box(
+        ax=ax,
+        ylabel="Distance [m]",
+        title=f"Cow to cow distances during replacement events",
+    )
+    filepath = folder_path / f"cow_to_cow_boxplot.png"
+    fig.savefig(filepath, dpi=300)
+
+    # Actor to bin distances
+    fig, ax = plt.subplots()
+    stats[["actor_bin_min_m", "actor_bin_mean_m", "actor_bin_max_m"]].plot.box(
+        ax=ax,
+        ylabel="Distance [m]",
+        title=f"Actor to feed bin distances during replacement events",
+    )
+    filepath = folder_path / f"actor_to_bin_boxplot.png"
+    fig.savefig(filepath, dpi=300)
+
+    # Reactor to bin distances
+    fig, ax = plt.subplots()
+    stats[["reactor_bin_min_m", "reactor_bin_mean_m", "reactor_bin_max_m"]].plot.box(
+        ax=ax,
+        ylabel="Distance [m]",
+        title=f"Reactor to feed bin distances during replacement events",
+    )
+    filepath = folder_path / f"reactor_to_bin_boxplot.png"
+    fig.savefig(filepath, dpi=300)
+
+    plt.show()
