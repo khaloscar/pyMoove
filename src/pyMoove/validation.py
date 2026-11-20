@@ -1,6 +1,10 @@
 """Checks for the various dataframes used, can be used to ensure that the passed dataframes has the expected structure."""
 import pandas as pd
 
+#NOTE: Currently, columns may be defined at different places, 
+#NOTE: perhaps one central definition should be used and modified?
+#TODO: Look into this
+
 def _check_columns(df: pd.DataFrame, expected_columns: list[str], name: str)->None:
     """
     Verify that a given DataFrame contains at least the expected columns.
@@ -40,6 +44,20 @@ def check_replacement_dataframe_structure(df: pd.DataFrame)->None:
 
     _check_columns(df, expected_columns, "Replacements")
 
+
+def check_gos_event_dataframe_structure(df: pd.DataFrame)->None:
+    """Verify that a DataFrame has the expected replacement event structure"""
+
+    expected_columns = [
+        "cow_1_id",
+        "cow_2_id",
+        "bin",
+        "timestamps",
+        "positions",
+        "velocities",
+    ]
+
+    _check_columns(df, expected_columns, "Gos-events")
 
 
 def check_positions_dataframe_structure(df: pd.DataFrame)->None:
