@@ -114,7 +114,7 @@ def check_replacement_statistics_dataframe_structure(df: pd.DataFrame) -> None:
     """Verify that a DataFrame has the expected replacement-statistics columns."""
 
     expected_columns = [
-        "event_id",
+        "repl_id",
         "actor_cow",
         "reactor_cow",
         "bin",
