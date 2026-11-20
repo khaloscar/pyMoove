@@ -15,7 +15,7 @@ df_replacements: pd.DataFrame = dataset["replacements"]
 df_bin_stats = mooveIO.load_bin_stats_parquet(data_dir / "bin_position_stats.parquet")
 
 # Get cow to cow and cow to feeding bin distance information for each event
-repl_event_stats = mooveStats.inspect_replacement_event_statistics(
+repl_event_stats = mooveStats.compute_replacement_event_statistics(
     df_positions, df_replacements, df_bin_stats)
 
 # Summarize the information for the whole set
@@ -30,7 +30,7 @@ df_replacements_clean = mooveClean.filter_replacement_events(
     df_replacements, repl_event_stats)
 
 # Recalculate statistics for cleaned events
-repl_event_stats_clean = mooveStats.inspect_replacement_event_statistics(
+repl_event_stats_clean = mooveStats.compute_replacement_event_statistics(
     df_positions, df_replacements_clean, df_bin_stats
 )
 # Inspect again to verify

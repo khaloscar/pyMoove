@@ -38,7 +38,7 @@ print(df_positions.head())
 # Get the replacement statistics df
 time_before = 30.0
 time_after = 30.0
-df_replacements_stats = mooveStats.inspect_replacement_event_statistics(
+df_replacements_stats = mooveStats.compute_replacement_event_statistics(
                         df_positions,
                         df_replacements,
                         df_bin_stats,
@@ -50,7 +50,7 @@ df_replacements_stats = mooveStats.inspect_replacement_event_statistics(
 mooveStats.summarize_event_coverage(df_replacements_stats)
 df_replacements = mooveClean.filter_replacement_events(df_replacements, df_replacements_stats)
 # The replacement event statistics does not contain invalid events, do boxplots on this data..
-df_replacements_stats = mooveStats.inspect_replacement_event_statistics(
+df_replacements_stats = mooveStats.compute_replacement_event_statistics(
                         df_positions,
                         df_replacements,
                         df_bin_stats,
