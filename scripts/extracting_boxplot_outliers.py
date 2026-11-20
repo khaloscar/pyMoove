@@ -16,7 +16,7 @@ df_replacements = dataset["replacements"]
 df_bin_stats = mooveIO.load_bin_stats_parquet(data_dir / "bin_position_stats.parquet")
 
 # Compute the cow to cow and cow to feeding bin distances for all events
-repl_event_stats = mooveStats.inspect_replacement_event_statistics(
+repl_event_stats = mooveStats.compute_replacement_event_statistics(
     df_positions, df_replacements, df_bin_stats)
 
 
@@ -42,7 +42,7 @@ for column in columns:
     outliers.append(mooveStats.find_boxplot_outliers(repl_event_stats, column))
 
 # All unique event outliers are collected into one dataframe.
-unique_outliers = pd.concat(outliers).drop_duplicates(subset="event_id")
+unique_outliers = pd.concat(outliers).drop_duplicates(subset="repl_id")
 
 
 # We can inspect the outliers however we like
