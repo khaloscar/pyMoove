@@ -12,7 +12,7 @@ dataset = mooveIO.load_processed_dataset(data_dir)
 df_positions = dataset["positions"]
 df_replacements: pd.DataFrame = dataset["replacements"]
 df_bin_stats = mooveIO.load_bin_stats_parquet(data_dir / "bin_position_stats.parquet")
-stats = mooveStats.inspect_replacement_event_statistics(
+stats = mooveStats.compute_replacement_event_statistics(
     df_positions, df_replacements, df_bin_stats)
 
 # Create a boolean mask
@@ -43,9 +43,9 @@ print(range_bins.head())
 print()
 
 # Selection of individual event
-eventMask = stats["event_id"] == 1
+eventMask = stats["repl_id"] == "REPL-20251010-00079"
 eventOne = stats[eventMask]
-print("\nSelection of event_id 1")
+print("\nSelection of repl_id REPL-20251010-00079")
 print(eventOne.head())
 print()
 

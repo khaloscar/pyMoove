@@ -225,6 +225,7 @@ def compute_replacement_event_statistics(
     return pd.DataFrame(event_statistics)
 
 
+#TODO: To be removed!
 def inspect_replacement_event_statistics(
         positions: pd.DataFrame,
         replacements: pd.DataFrame,
@@ -371,6 +372,24 @@ def summarize_event_coverage(stats: pd.DataFrame)->None:
 
 
 def find_boxplot_outliers(stats: pd.DataFrame, column: str)->pd.DataFrame:
+    """
+    Computes the outliers outside the whiskers from boxplot statistics. 
+    Defined by box edge +- 1.5*IQR
+    q1: containt 25% of data.
+    q3: contains 75% of data.
+    IQR = q3 - q1
+    
+    inputs:
+    --------------
+        stats: pd.DataFrame
+            any dataframe containing
+        column: str
+            column of interest
+
+    returns
+    --------------
+        boxplot outliers: pd.DataFrame
+    """
 
     q1, q3 = stats[column].quantile([0.25, 0.75])
     iqr = q3 - q1
