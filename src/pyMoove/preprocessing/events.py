@@ -28,6 +28,8 @@ def build_gos_event_table(
     replacements: pd.DataFrame,
     positions: pd.DataFrame,
     print_skipped: bool = False,
+    relative_start_time: int = 30,
+    relative_end_time: int = 30
 ) -> pd.DataFrame:
     """Construct GOS event records from replacement and position DataFrames.
 
@@ -100,13 +102,13 @@ def build_gos_event_table(
     for row_index, event in replacements.iterrows():
         actor_id = str(event["actor_cow"])
         reactor_id = str(event["reactor_cow"])
-        start = pd.to_datetime(event["time"], utc=True, errors="raise")
+        start = pd.to_datetime(event["time"], utc=True, errors="raise") - relative_start_time
         bout_interval = float(event["bout_interval"])
         if not np.isfinite(bout_interval) or bout_interval < 0:
             raise ValueError(
                 f"replacement row {row_index} has an invalid bout_interval"
             )
-        end = start + pd.to_timedelta(bout_interval, unit="s")
+        end = start + pd.to_timedelta(bout_interval, unit="s") + relative_end_time
 
         actor_track = cow_tracks.get(actor_id, empty_track).loc[start:end]
         reactor_track = cow_tracks.get(reactor_id, empty_track).loc[start:end]
