@@ -5,6 +5,7 @@ from .plots import (
     plot_confusion_matrix,
     plot_precision_recall_curve,
     plot_roc_curve,
+    plot_recall_sensitivity_curve,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "plot_confusion_matrix",
     "plot_precision_recall_curve",
     "plot_roc_curve",
+    "plot_recall_sensitivity_curve",
 ]

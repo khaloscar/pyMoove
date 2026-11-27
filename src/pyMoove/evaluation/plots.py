@@ -7,6 +7,7 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay,
     PrecisionRecallDisplay,
     RocCurveDisplay,
+    precision_recall_curve,
 )
 
 
@@ -58,6 +59,27 @@ def plot_precision_recall_curve(
         pos_label=positive_label,
         ax=ax,
     )
+    return ax
+
+
+def plot_recall_sensitivity_curve(
+    y_true: ArrayLike,
+    y_score: ArrayLike,
+    *,
+    positive_label: object = 1,
+    ax: Axes | None = None,
+) -> Axes:
+    """Plot recall (sensitivity) against score thresholds."""
+    ax = _get_axes(ax)
+    recall, thresholds = precision_recall_curve(
+        y_true,
+        y_score,
+        pos_label=positive_label,
+    )[1:]
+    ax.plot(thresholds, recall[:-1])
+    ax.set_xlabel("Threshold")
+    ax.set_ylabel("Recall (sensitivity)")
+    ax.set_title("Recall (sensitivity) by threshold")
     return ax
 
 
