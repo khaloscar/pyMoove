@@ -24,13 +24,16 @@ def _exchange_roles(
     cow_1: str,
     cow_2: str,
     time: float,
+    bout_interval: float,
     exchange_window: float,
     minimum_distance_change: float,
     minimum_track_fixes: int,
 ) -> tuple[str, str] | None:
     """Identify the departing and approaching cow in a candidate event."""
     before_start = time - exchange_window
-    after_end = time + exchange_window
+    before_end = time
+    after_start = time + bout_interval
+    after_end = time + bout_interval + exchange_window
 
     distance_changes: dict[str, float] = {}
     before_distances: dict[str, float] = {}
@@ -43,9 +46,9 @@ def _exchange_roles(
         track_times, distance_prefix = track
 
         before_left = int(np.searchsorted(track_times, before_start, side='left'))
-        before_right = int(np.searchsorted(track_times, time, side='right'))
-        after_left = int(np.searchsorted(track_times, time, side='left'))
-        after_right = int(np.searchsorted(track_times, after_end, side='right'))
+        before_right = int(np.searchsorted(track_times, before_end, side='right'))
+        after_left = int(np.searchsorted(track_times, after_start, side='left'))
+        after_right = int(np.searchsorted(track_times, after_end, side='right')) 
 
         before_count = before_right - before_left
         after_count = after_right - after_left
@@ -223,6 +226,7 @@ def detect_bin_interactions_by_bin(positions: pd.DataFrame,
                         cow_1=cow_u,
                         cow_2=cow_v,
                         time=time,
+                        bout_interval=bout_interval,
                         exchange_window=exchange_window,
                         minimum_distance_change=minimum_distance_change,
                         minimum_track_fixes=minimum_track_fixes,
